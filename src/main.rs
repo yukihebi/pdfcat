@@ -92,17 +92,23 @@ fn execute_run(
 
     match (output, count_bytes) {
         (Some(path), true) => {
+            // Mirror lopdf::Document::save's BufWriter so disk writes stay batched;
+            // CountingWriter sits above it and tallies the same bytes that reach disk.
             let file = std::fs::File::create(path).map_err(|source| Error::WriteOutput {
                 path: path.to_string(),
                 source,
             })?;
-            let mut w = CountingWriter::new(file);
+            let mut w = CountingWriter::new(std::io::BufWriter::new(file));
             merged
                 .save_to(&mut w)
                 .map_err(|source| Error::WriteOutput {
                     path: path.to_string(),
                     source,
                 })?;
+            w.flush().map_err(|source| Error::WriteOutput {
+                path: path.to_string(),
+                source,
+            })?;
             writeln!(report, "bytes: {}", w.count()).map_err(Error::ReportIo)?;
         }
         (Some(path), false) => {
