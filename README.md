@@ -16,19 +16,22 @@ cargo build --release
 ## Usage
 
 ```
-pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] -o <OUTPUT>
+pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--count-pages] [--count-bytes]
 ```
 
 Inputs are processed in the order given and concatenated. `-p`/`--pages`
 selects pages from the *immediately preceding* input file; without it, the
-whole file is used. `-o`/`--output` is required and may appear anywhere.
+whole file is used. `-o`/`--output` may appear anywhere; at least one of
+`-o`, `--count-pages`, `--count-bytes` must be given.
 
 | Option | Description |
 | --- | --- |
 | `-h`, `--help` | Print help |
 | `-V`, `--version` | Print version |
-| `-o`, `--output <FILE>` | Output file (required) |
+| `-o`, `--output <FILE>` | Output file |
 | `-p`, `--pages <SPEC>` | Page selection for the preceding input (aliases: `--page`, `-pp`) |
+| `--count-pages` | Print the merged page count to stdout. Aliases: `--count-page`, `--page-count`, `--page-counts`, `--num-pages`, `--num-page`, `--npages`, `--npage` |
+| `--count-bytes` | Print the merged byte count to stdout. Aliases: `--count-byte`, `--byte-count`, `--byte-counts`, `--num-bytes`, `--num-byte`, `--nbytes`, `--nbyte` |
 | `--` | Treat every following argument as an input file |
 
 ### Page spec
@@ -63,10 +66,19 @@ pdfcat x.pdf -p 1-3 y.pdf -p 5- -o out.pdf
 
 # An input whose name starts with '-'
 pdfcat -o out.pdf -- -scan.pdf
+
+# Inspect the result without writing a file
+pdfcat x.pdf y.pdf --count-pages --count-bytes
+
+# Write and report at the same time
+pdfcat x.pdf -p 1-3 -o out.pdf --count-bytes
 ```
 
 ## Behaviour
 
+- `--count-pages` and `--count-bytes` print one labeled line each to
+  stdout (in `pages → bytes` order), and may be combined with `-o`
+  or used on their own.
 - Pages keep their original size; mixing different page sizes is fine.
 - Inherited page attributes (`Resources`, `MediaBox`, `CropBox`, `Rotate`) are
   flattened onto each page so geometry survives the merge.
