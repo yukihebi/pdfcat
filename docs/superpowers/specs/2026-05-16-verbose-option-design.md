@@ -12,6 +12,13 @@ count, and the bytes written.
 ## CLI
 
 - New flag: `-v`, `--verbose`. Takes no value (`-v=foo` → `UnexpectedValue`).
+- **Breaking change:** `-v` currently aliases `--version` in `cli.rs`. It is
+  reassigned to `--verbose` (Unix convention: `-v` = verbose; `-V` /
+  `--version` is still recognised). The existing test
+  `parse_args(&["-v"]) == Ok(Command::Version)` is updated accordingly. The
+  README/help do not currently document `-v` as a version alias, so the
+  user-visible surface only changes for those who were using the
+  undocumented alias.
 - Independent from `-q` / `--quiet`. Both may be given simultaneously: `-q`
   controls the stdout numeric output (existing), `-v` controls the stderr
   progress log (new). They never interact.
