@@ -69,7 +69,6 @@ impl fmt::Display for Range {
 
 /// Re-format a parsed range list as a comma-separated spec, preserving
 /// order and duplicates. Used by the verbose header.
-#[allow(dead_code)]
 pub fn fmt_ranges(ranges: &[Range]) -> String {
     let mut out = String::new();
     for (i, r) in ranges.iter().enumerate() {

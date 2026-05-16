@@ -193,3 +193,78 @@ fn fmt_header_index_pads_for_three_digit_total() {
     assert_eq!(fmt_header_index(1, 100), "[  1/100]");
     assert_eq!(fmt_header_index(100, 100), "[100/100]");
 }
+
+fn write_tiny_pdf(n: usize, name: &str) -> std::path::PathBuf {
+    let mut doc = tiny_doc(n);
+    let path = std::env::temp_dir().join(format!("pdfcat-{name}-{}.pdf", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    doc.save(&path).unwrap();
+    path
+}
+
+#[test]
+fn load_sources_verbose_logs_header_and_detail_with_pages() {
+    let path = write_tiny_pdf(5, "load-verbose-pages");
+    let inputs = vec![cli::Input {
+        path: path.to_str().unwrap().to_string(),
+        ranges: Some(pages::parse_ranges("1,3").unwrap()),
+    }];
+    let mut log = Vec::new();
+    load_sources(&inputs, true, &mut log).unwrap();
+    let s = std::str::from_utf8(&log).unwrap();
+    let expected = format!(
+        "[1/1] {} -p 1,3\n      5 pages total, 2 selected\n",
+        path.to_str().unwrap()
+    );
+    assert_eq!(s, expected);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn load_sources_verbose_uses_all_when_ranges_absent() {
+    let path = write_tiny_pdf(3, "load-verbose-all");
+    let inputs = vec![cli::Input {
+        path: path.to_str().unwrap().to_string(),
+        ranges: None,
+    }];
+    let mut log = Vec::new();
+    load_sources(&inputs, true, &mut log).unwrap();
+    let s = std::str::from_utf8(&log).unwrap();
+    let expected = format!(
+        "[1/1] {}\n      3 pages total, all\n",
+        path.to_str().unwrap()
+    );
+    assert_eq!(s, expected);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn load_sources_verbose_pads_header_index() {
+    let path = write_tiny_pdf(2, "load-verbose-padded");
+    let p = path.to_str().unwrap().to_string();
+    let inputs: Vec<cli::Input> = (0..10)
+        .map(|_| cli::Input {
+            path: p.clone(),
+            ranges: None,
+        })
+        .collect();
+    let mut log = Vec::new();
+    load_sources(&inputs, true, &mut log).unwrap();
+    let s = std::str::from_utf8(&log).unwrap();
+    assert!(s.contains(&format!("[ 1/10] {p}\n")), "got: {s}");
+    assert!(s.contains(&format!("[10/10] {p}\n")), "got: {s}");
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn load_sources_silent_when_verbose_false() {
+    let path = write_tiny_pdf(2, "load-silent");
+    let inputs = vec![cli::Input {
+        path: path.to_str().unwrap().to_string(),
+        ranges: None,
+    }];
+    let mut log = Vec::new();
+    load_sources(&inputs, false, &mut log).unwrap();
+    assert!(log.is_empty());
+    let _ = std::fs::remove_file(&path);
+}
