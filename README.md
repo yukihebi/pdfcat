@@ -1,5 +1,7 @@
 # pdfcat
 
+[![CI](https://github.com/yukihebi/pdfcat/actions/workflows/ci.yml/badge.svg)](https://github.com/yukihebi/pdfcat/actions/workflows/ci.yml)
+
 A small command-line tool to concatenate PDF files and extract pages from
 them. Written in pure Rust (using [`lopdf`](https://crates.io/crates/lopdf));
 no native dependencies.
