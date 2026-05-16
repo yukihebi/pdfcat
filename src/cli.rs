@@ -117,6 +117,7 @@ impl<'a> Parser<'a> {
             "-V" | "-v" | "--version" => return Ok(Some(Command::Version)),
             "-o" | "--output" => self.set_output(inline)?,
             "-p" | "-pp" | "--page" | "--pages" => self.add_pages(inline)?,
+            // No-value flags: any `=value` is silently ignored, as for --help/--version.
             "--count-pages" | "--count-page" | "--page-count" | "--page-counts" | "--num-pages"
             | "--num-page" | "--npages" | "--npage" => self.count_pages = true,
             "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
@@ -360,8 +361,7 @@ mod tests {
             other => panic!("expected Run, got {other:?}"),
         }
 
-        let (cp, _, _) = parse_one("--count-pages");
-        assert!(cp);
+        // Repeating equivalent aliases is idempotent (no DuplicateOutput-style error).
         match parse_args(&["a.pdf", "--count-pages", "--num-pages"]).unwrap() {
             Command::Run { count_pages, .. } => assert!(count_pages),
             other => panic!("expected Run, got {other:?}"),
