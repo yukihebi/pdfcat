@@ -287,7 +287,6 @@ fn load_sources_verbose_logs_header_and_detail_with_pages() {
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
-    drop(vlog);
     let s = std::str::from_utf8(&log).unwrap();
     let expected = format!(
         "[1/1] {} -p 1,3\n      5 pages total, 2 selected\n",
@@ -307,7 +306,6 @@ fn load_sources_verbose_uses_all_when_ranges_absent() {
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
-    drop(vlog);
     let s = std::str::from_utf8(&log).unwrap();
     let expected = format!(
         "[1/1] {}\n      3 pages total, all\n",
@@ -330,7 +328,6 @@ fn load_sources_verbose_pads_header_index() {
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
-    drop(vlog);
     let s = std::str::from_utf8(&log).unwrap();
     assert!(s.contains(&format!("[ 1/10] {p}\n")), "got: {s}");
     assert!(s.contains(&format!("[10/10] {p}\n")), "got: {s}");
@@ -347,7 +344,6 @@ fn load_sources_silent_when_verbose_false() {
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
-    drop(vlog);
     assert!(log.is_empty());
     let _ = std::fs::remove_file(&path);
 }
@@ -369,7 +365,6 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
         quiet: false,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
-    drop(vlog);
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();
     let s = std::str::from_utf8(&log).unwrap();
@@ -402,7 +397,6 @@ fn execute_run_verbose_no_output_skips_wrote_line() {
         quiet: false,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
-    drop(vlog);
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
     assert_eq!(lines, vec!["merged: 2 pages"]);
@@ -428,7 +422,6 @@ fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
         quiet: false,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
-    drop(vlog);
 
     let log_s = std::str::from_utf8(&log).unwrap();
     let report_s = std::str::from_utf8(&report).unwrap();
@@ -462,7 +455,6 @@ fn execute_run_quiet_and_verbose_coexist() {
         quiet: true,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
-    drop(vlog);
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();
     let report_s = std::str::from_utf8(&report).unwrap();
@@ -490,7 +482,6 @@ fn verbose_log_disabled_writes_nothing() {
     vlog.log_merged(7).unwrap();
     vlog.log_wrote("out.pdf", 12345).unwrap();
     vlog.flush().unwrap();
-    drop(vlog);
     assert!(sink.is_empty());
 }
 
@@ -499,7 +490,6 @@ fn verbose_log_enabled_log_merged_writes_line() {
     let mut sink = Vec::<u8>::new();
     let mut vlog = VerboseLog::new(true, &mut sink);
     vlog.log_merged(42).unwrap();
-    drop(vlog);
     assert_eq!(sink, b"merged: 42 pages\n");
 }
 
@@ -508,7 +498,6 @@ fn verbose_log_enabled_log_wrote_writes_line() {
     let mut sink = Vec::<u8>::new();
     let mut vlog = VerboseLog::new(true, &mut sink);
     vlog.log_wrote("out.pdf", 12345).unwrap();
-    drop(vlog);
     assert_eq!(sink, b"wrote out.pdf (12345 bytes)\n");
 }
 
@@ -517,7 +506,6 @@ fn verbose_log_enabled_log_input_detail_with_ranges() {
     let mut sink = Vec::<u8>::new();
     let mut vlog = VerboseLog::new(true, &mut sink);
     vlog.log_input_detail("      ", 10, Some(3)).unwrap();
-    drop(vlog);
     assert_eq!(sink, b"      10 pages total, 3 selected\n");
 }
 
@@ -526,6 +514,5 @@ fn verbose_log_enabled_log_input_detail_all() {
     let mut sink = Vec::<u8>::new();
     let mut vlog = VerboseLog::new(true, &mut sink);
     vlog.log_input_detail("      ", 5, None).unwrap();
-    drop(vlog);
     assert_eq!(sink, b"      5 pages total, all\n");
 }
