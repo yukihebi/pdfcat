@@ -9,7 +9,7 @@ use std::process::ExitCode;
 use thiserror::Error;
 
 use pages::PageSpecError;
-use runner::{execute_run, load_sources};
+use runner::{VerboseLog, execute_run, load_sources};
 
 fn main() -> ExitCode {
     match run() {
@@ -77,8 +77,8 @@ fn run() -> Result<(), Error> {
             let mut report = stdout.lock();
             let stderr = io::stderr();
             if verbose {
-                let mut log = stderr.lock();
-                let sources = load_sources(&inputs, true, &mut log)?;
+                let mut vlog = VerboseLog::new(true, stderr.lock());
+                let sources = load_sources(&inputs, &mut vlog)?;
                 let mut merged = merge::merge(sources)?;
                 execute_run(
                     &mut merged,
@@ -86,13 +86,12 @@ fn run() -> Result<(), Error> {
                     count_pages,
                     count_bytes,
                     quiet,
-                    true,
                     &mut report,
-                    &mut log,
+                    &mut vlog,
                 )
             } else {
-                let mut sink = io::sink();
-                let sources = load_sources(&inputs, false, &mut sink)?;
+                let mut vlog = VerboseLog::new(false, io::sink());
+                let sources = load_sources(&inputs, &mut vlog)?;
                 let mut merged = merge::merge(sources)?;
                 execute_run(
                     &mut merged,
@@ -100,9 +99,8 @@ fn run() -> Result<(), Error> {
                     count_pages,
                     count_bytes,
                     quiet,
-                    false,
                     &mut report,
-                    &mut sink,
+                    &mut vlog,
                 )
             }
         }

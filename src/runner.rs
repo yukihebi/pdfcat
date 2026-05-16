@@ -6,6 +6,27 @@ use crate::Error;
 use crate::cli::Input;
 use crate::pages::{fmt_ranges, resolve_ranges};
 
+/// Pair of an enabled flag and a writer for the verbose stderr log.
+/// When `enabled()` is `false`, the writer is not touched.
+pub(crate) struct VerboseLog<W: Write> {
+    enabled: bool,
+    inner: W,
+}
+
+impl<W: Write> VerboseLog<W> {
+    pub(crate) fn new(enabled: bool, inner: W) -> Self {
+        VerboseLog { enabled, inner }
+    }
+
+    pub(crate) fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub(crate) fn writer(&mut self) -> &mut W {
+        &mut self.inner
+    }
+}
+
 /// A `Write` adapter that forwards to an inner writer and counts the bytes
 /// that were actually written (i.e. accepted by the inner writer).
 struct CountingWriter<W: Write> {
@@ -48,19 +69,18 @@ fn write_count(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn execute_run(
+pub(crate) fn execute_run<R: Write, W: Write>(
     merged: &mut Document,
     output: Option<&str>,
     count_pages: bool,
     count_bytes: bool,
     quiet: bool,
-    verbose: bool,
-    report: &mut impl Write,
-    log: &mut impl Write,
+    report: &mut R,
+    vlog: &mut VerboseLog<W>,
 ) -> Result<(), Error> {
-    if verbose {
-        writeln!(log, "merged: {} pages", merged.get_pages().len()).map_err(Error::ReportIo)?;
+    if vlog.enabled() {
+        writeln!(vlog.writer(), "merged: {} pages", merged.get_pages().len())
+            .map_err(Error::ReportIo)?;
     }
 
     if count_pages {
@@ -89,8 +109,9 @@ pub(crate) fn execute_run(
             if need_bytes {
                 write_count(report, "bytes", w.count(), quiet)?;
             }
-            if verbose {
-                writeln!(log, "wrote {path} ({} bytes)", w.count()).map_err(Error::ReportIo)?;
+            if vlog.enabled() {
+                writeln!(vlog.writer(), "wrote {path} ({} bytes)", w.count())
+                    .map_err(Error::ReportIo)?;
             }
         }
         (None, true) => {
@@ -112,27 +133,32 @@ pub(crate) fn execute_run(
 }
 
 /// Load each input document and resolve its page selection against the actual
-/// page count. When `verbose` is true, write a header line to `log` *before*
-/// loading each file (so failures are attributable) and a detail line after.
-pub(crate) fn load_sources(
+/// page count. When `vlog.enabled()` is true, write a header line to the log
+/// *before* loading each file (so failures are attributable) and a detail line
+/// after.
+pub(crate) fn load_sources<W: Write>(
     inputs: &[Input],
-    verbose: bool,
-    log: &mut impl Write,
+    vlog: &mut VerboseLog<W>,
 ) -> Result<Vec<(Document, Vec<u32>)>, Error> {
     let mut sources = Vec::with_capacity(inputs.len());
     let total_inputs = inputs.len();
     let indent = " ".repeat(fmt_header_index(1, total_inputs).len() + 1);
     for (idx, input) in inputs.iter().enumerate() {
-        if verbose {
+        if vlog.enabled() {
             let head = fmt_header_index(idx + 1, total_inputs);
             match &input.ranges {
                 Some(ranges) => {
-                    writeln!(log, "{head} {} -p {}", input.path, fmt_ranges(ranges))
+                    writeln!(
+                        vlog.writer(),
+                        "{head} {} -p {}",
+                        input.path,
+                        fmt_ranges(ranges)
+                    )
                 }
-                None => writeln!(log, "{head} {}", input.path),
+                None => writeln!(vlog.writer(), "{head} {}", input.path),
             }
             .map_err(Error::ReportIo)?;
-            log.flush().map_err(Error::ReportIo)?;
+            vlog.writer().flush().map_err(Error::ReportIo)?;
         }
         let doc = Document::load(&input.path).map_err(|source| Error::ReadInput {
             path: input.path.clone(),
@@ -153,13 +179,14 @@ pub(crate) fn load_sources(
                 })?
             }
         };
-        if verbose {
+        if vlog.enabled() {
             let count_str = if input.ranges.is_none() {
                 "all".to_string()
             } else {
                 format!("{} selected", selected.len())
             };
-            writeln!(log, "{indent}{total} pages total, {count_str}").map_err(Error::ReportIo)?;
+            writeln!(vlog.writer(), "{indent}{total} pages total, {count_str}")
+                .map_err(Error::ReportIo)?;
         }
         sources.push((doc, selected));
     }
