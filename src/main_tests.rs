@@ -39,8 +39,20 @@ fn tiny_doc(n: usize) -> Document {
 fn execute_run_count_pages_only_writes_no_file() {
     let mut doc = tiny_doc(3);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, true, false, false, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        true,
+        false,
+        false,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     assert_eq!(report, b"pages: 3\n");
+    assert!(log.is_empty());
 }
 
 #[test]
@@ -53,22 +65,46 @@ fn execute_run_count_bytes_only_matches_serialized_size() {
 
     let mut doc = tiny_doc(2);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, false, true, false, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        false,
+        true,
+        false,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     let line = std::str::from_utf8(&report).unwrap();
     let prefix = "bytes: ";
     assert!(line.starts_with(prefix), "got {line:?}");
     let n: usize = line[prefix.len()..line.len() - 1].parse().unwrap();
     assert_eq!(n, expected.len());
+    assert!(log.is_empty());
 }
 
 #[test]
 fn execute_run_both_flags_emit_pages_then_bytes() {
     let mut doc = tiny_doc(1);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, true, true, false, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        true,
+        true,
+        false,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     assert!(s.starts_with("pages: 1\n"), "got {s:?}");
     assert!(s.contains("\nbytes: "), "got {s:?}");
+    assert!(log.is_empty());
 }
 
 #[test]
@@ -82,12 +118,24 @@ fn execute_run_writes_file_when_output_given() {
     let path = tmp.to_str().unwrap().to_string();
 
     let mut report = Vec::new();
-    execute_run(&mut doc, Some(&path), false, true, false, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        Some(&path),
+        false,
+        true,
+        false,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();
     let s = std::str::from_utf8(&report).unwrap();
     let reported: u64 = s.trim_start_matches("bytes: ").trim().parse().unwrap();
     assert_eq!(on_disk, reported);
+    assert!(log.is_empty());
 
     let _ = std::fs::remove_file(&tmp);
 }
@@ -96,8 +144,20 @@ fn execute_run_writes_file_when_output_given() {
 fn execute_run_quiet_count_pages_omits_label() {
     let mut doc = tiny_doc(3);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, true, false, true, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        true,
+        false,
+        true,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     assert_eq!(report, b"3\n");
+    assert!(log.is_empty());
 }
 
 #[test]
@@ -108,23 +168,47 @@ fn execute_run_quiet_count_bytes_omits_label() {
 
     let mut doc = tiny_doc(2);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, false, true, true, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        false,
+        true,
+        true,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     let n: usize = s.trim_end().parse().unwrap();
     assert_eq!(n, expected.len());
+    assert!(log.is_empty());
 }
 
 #[test]
 fn execute_run_quiet_both_emits_two_bare_numbers() {
     let mut doc = tiny_doc(4);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, true, true, true, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        true,
+        true,
+        true,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     let mut lines = s.lines();
     assert_eq!(lines.next(), Some("4"));
     let bytes: u64 = lines.next().unwrap().parse().unwrap();
     assert!(bytes > 0);
     assert_eq!(lines.next(), None);
+    assert!(log.is_empty());
 }
 
 #[test]
@@ -136,8 +220,20 @@ fn execute_run_quiet_no_counts_emits_nothing() {
     let path = tmp.to_str().unwrap().to_string();
 
     let mut report = Vec::new();
-    execute_run(&mut doc, Some(&path), false, false, true, &mut report).unwrap();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        Some(&path),
+        false,
+        false,
+        true,
+        false,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
     assert!(report.is_empty());
+    assert!(log.is_empty());
 
     let _ = std::fs::remove_file(&tmp);
 }
@@ -267,4 +363,143 @@ fn load_sources_silent_when_verbose_false() {
     load_sources(&inputs, false, &mut log).unwrap();
     assert!(log.is_empty());
     let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
+    let mut doc = tiny_doc(4);
+    let tmp = std::env::temp_dir().join(format!("pdfcat-exec-verbose-{}.pdf", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    let path = tmp.to_str().unwrap().to_string();
+
+    let mut report = Vec::new();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        Some(&path),
+        false,
+        false,
+        false,
+        true,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
+
+    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+    let s = std::str::from_utf8(&log).unwrap();
+    let lines: Vec<&str> = s.lines().collect();
+    assert_eq!(lines.len(), 2, "got: {s}");
+    assert_eq!(lines[0], "merged: 4 pages");
+    let wrote_prefix = format!("wrote {path} (");
+    assert!(lines[1].starts_with(&wrote_prefix), "got: {}", lines[1]);
+    assert!(lines[1].ends_with(" bytes)"), "got: {}", lines[1]);
+    let inside = lines[1]
+        .trim_start_matches(&wrote_prefix)
+        .trim_end_matches(" bytes)");
+    let reported: u64 = inside.parse().unwrap();
+    assert_eq!(reported, on_disk);
+    assert!(report.is_empty(), "report should be empty: {report:?}");
+
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn execute_run_verbose_no_output_skips_wrote_line() {
+    let mut doc = tiny_doc(2);
+    let mut report = Vec::new();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        None,
+        false,
+        true,
+        false,
+        true,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
+    let s = std::str::from_utf8(&log).unwrap();
+    let lines: Vec<&str> = s.lines().collect();
+    assert_eq!(lines, vec!["merged: 2 pages"]);
+    let r = std::str::from_utf8(&report).unwrap();
+    assert!(r.starts_with("bytes: "), "got: {r}");
+}
+
+#[test]
+fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
+    let mut doc = tiny_doc(3);
+    let tmp =
+        std::env::temp_dir().join(format!("pdfcat-exec-verbose-cb-{}.pdf", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    let path = tmp.to_str().unwrap().to_string();
+
+    let mut report = Vec::new();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        Some(&path),
+        false,
+        true,
+        false,
+        true,
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
+
+    let log_s = std::str::from_utf8(&log).unwrap();
+    let report_s = std::str::from_utf8(&report).unwrap();
+    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+
+    assert!(log_s.starts_with("merged: 3 pages\n"), "log: {log_s}");
+    assert!(
+        log_s.contains(&format!("wrote {path} ({on_disk} bytes)\n")),
+        "log: {log_s}"
+    );
+
+    assert_eq!(report_s, format!("bytes: {on_disk}\n"));
+
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn execute_run_quiet_and_verbose_coexist() {
+    let mut doc = tiny_doc(2);
+    let tmp = std::env::temp_dir().join(format!("pdfcat-exec-qv-{}.pdf", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    let path = tmp.to_str().unwrap().to_string();
+
+    let mut report = Vec::new();
+    let mut log = Vec::new();
+    execute_run(
+        &mut doc,
+        Some(&path),
+        true,
+        true,
+        true, // quiet
+        true, // verbose
+        &mut report,
+        &mut log,
+    )
+    .unwrap();
+
+    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+    let report_s = std::str::from_utf8(&report).unwrap();
+    let log_s = std::str::from_utf8(&log).unwrap();
+
+    let mut report_lines = report_s.lines();
+    assert_eq!(report_lines.next(), Some("2"));
+    let bytes_line = report_lines.next().unwrap();
+    assert_eq!(bytes_line.parse::<u64>().unwrap(), on_disk);
+    assert_eq!(report_lines.next(), None);
+
+    assert!(log_s.starts_with("merged: 2 pages\n"), "log: {log_s}");
+    assert!(
+        log_s.contains(&format!("wrote {path} ({on_disk} bytes)\n")),
+        "log: {log_s}"
+    );
+
+    let _ = std::fs::remove_file(&tmp);
 }

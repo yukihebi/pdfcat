@@ -92,22 +92,29 @@ fn write_count(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_run(
     merged: &mut Document,
     output: Option<&str>,
     count_pages: bool,
     count_bytes: bool,
     quiet: bool,
+    verbose: bool,
     report: &mut impl Write,
+    log: &mut impl Write,
 ) -> Result<(), Error> {
+    if verbose {
+        writeln!(log, "merged: {} pages", merged.get_pages().len()).map_err(Error::ReportIo)?;
+    }
+
     if count_pages {
         write_count(report, "pages", merged.get_pages().len(), quiet)?;
     }
 
     match (output, count_bytes) {
-        (Some(path), true) => {
-            // Mirror lopdf::Document::save's BufWriter so disk writes stay batched;
-            // CountingWriter sits above it and tallies the same bytes that reach disk.
+        (Some(path), need_bytes) => {
+            // Always go through a CountingWriter so the verbose `wrote` line
+            // can include the byte count even when --count-bytes is absent.
             let file = std::fs::File::create(path).map_err(|source| Error::WriteOutput {
                 path: path.to_string(),
                 source,
@@ -123,13 +130,12 @@ fn execute_run(
                 path: path.to_string(),
                 source,
             })?;
-            write_count(report, "bytes", w.count(), quiet)?;
-        }
-        (Some(path), false) => {
-            merged.save(path).map_err(|source| Error::WriteOutput {
-                path: path.to_string(),
-                source,
-            })?;
+            if need_bytes {
+                write_count(report, "bytes", w.count(), quiet)?;
+            }
+            if verbose {
+                writeln!(log, "wrote {path} ({} bytes)", w.count()).map_err(Error::ReportIo)?;
+            }
         }
         (None, true) => {
             let mut w = CountingWriter::new(io::sink());
@@ -183,7 +189,9 @@ fn run() -> Result<(), Error> {
                 count_pages,
                 count_bytes,
                 quiet,
+                false,
                 &mut report,
+                &mut sink,
             )
         }
     }
