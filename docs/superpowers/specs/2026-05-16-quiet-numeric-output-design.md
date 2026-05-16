@@ -27,8 +27,12 @@ New flag: `-q`, `--quiet`.
   then bytes, one per line.
 - Position-independent — may appear anywhere in the argument list, like
   the existing `--count-*` flags.
-- Takes no value. As with the existing no-value flags, an inline
-  `--quiet=foo` is silently accepted (the `=foo` is ignored).
+- Takes no value. `--quiet=foo` is rejected with an error. Since the
+  `--count-*` family is also value-less, this change is applied to
+  them at the same time: `--count-pages=foo` and friends, which were
+  previously silently accepted, now also error. `--help`/`--version`
+  remain as they are (silent), matching common convention for those
+  flags.
 - No aliases. `-q` and `--quiet` are short and idiomatic enough.
 - Used alone (no `--count-*`), `-q` is a no-op. This is intentional so
   that scripts can pass `-q` unconditionally. `NoAction` is unchanged:
@@ -57,8 +61,13 @@ Smallest change that fits the existing structure: thread one extra
 - Add `quiet: bool` to `Parser` (default `false`) and to
   `Command::Run`.
 - Add a match arm for `-q` / `--quiet` next to the existing
-  `--count-*` arms; set `self.quiet = true`. Any `=value` is ignored,
-  matching the surrounding flags.
+  `--count-*` arms; set `self.quiet = true`.
+- Add a new error variant `CliError::UnexpectedValue(&'static str)`
+  ("`{name}` does not take a value"). In the match arms for the
+  value-less flags (`--count-pages`, `--count-bytes`, `--quiet`, and
+  their aliases), reject an inline `=value` by returning this error,
+  using a stable label per family (e.g. `"--count-pages"`,
+  `"--count-bytes"`, `"--quiet"`). `-h`/`-V` arms are untouched.
 - `finish()` is unchanged: `NoAction` still triggers when none of
   `-o`, `--count-pages`, `--count-bytes` is given. `quiet` does not
   count as an action.
@@ -99,8 +108,12 @@ Add one line:
 - `-q` combined with `--count-pages` produces `Command::Run { quiet: true, .. }`.
 - `-q` with only `-o` parses to `Command::Run { quiet: true, output: Some(..), count_pages: false, count_bytes: false }`.
 - `-q` with nothing else returns `CliError::NoAction`.
-- `--quiet=anything` is accepted (value ignored), consistent with
-  `--count-pages=anything`.
+- `--quiet=anything` returns `CliError::UnexpectedValue("--quiet")`.
+- `--count-pages=anything` (and any alias) returns
+  `CliError::UnexpectedValue("--count-pages")`; same for
+  `--count-bytes`.
+- `--help=foo` / `--version=foo` still parse to `Command::Help` /
+  `Command::Version` (unchanged behavior).
 
 ### `src/main_tests.rs`
 
