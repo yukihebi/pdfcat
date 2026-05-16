@@ -174,3 +174,22 @@ fn counting_writer_partial_write_counts_only_what_was_written() {
     assert_eq!(w.count(), 4);
     assert_eq!(inner.0, b"abcd");
 }
+
+#[test]
+fn fmt_header_index_single_digit_total() {
+    assert_eq!(fmt_header_index(1, 3), "[1/3]");
+    assert_eq!(fmt_header_index(3, 3), "[3/3]");
+}
+
+#[test]
+fn fmt_header_index_pads_for_two_digit_total() {
+    assert_eq!(fmt_header_index(1, 10), "[ 1/10]");
+    assert_eq!(fmt_header_index(9, 10), "[ 9/10]");
+    assert_eq!(fmt_header_index(10, 10), "[10/10]");
+}
+
+#[test]
+fn fmt_header_index_pads_for_three_digit_total() {
+    assert_eq!(fmt_header_index(1, 100), "[  1/100]");
+    assert_eq!(fmt_header_index(100, 100), "[100/100]");
+}

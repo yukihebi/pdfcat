@@ -217,6 +217,13 @@ fn load_sources(inputs: &[Input]) -> Result<Vec<(Document, Vec<u32>)>, Error> {
     Ok(sources)
 }
 
+/// Format `[i/total]` with `i` right-justified to the width of `total`.
+#[allow(dead_code)]
+fn fmt_header_index(i: usize, total: usize) -> String {
+    let width = total.to_string().len();
+    format!("[{i:>width$}/{total}]")
+}
+
 #[cfg(test)]
 #[path = "main_tests.rs"]
 mod tests;
