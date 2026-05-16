@@ -2,6 +2,7 @@ mod cli;
 mod merge;
 mod pages;
 
+use std::io::{self, Write};
 use std::process::ExitCode;
 
 use lopdf::Document;
@@ -9,6 +10,37 @@ use thiserror::Error;
 
 use cli::{Command, Input};
 use pages::{PageSpecError, resolve_ranges};
+
+/// A `Write` adapter that forwards to an inner writer and counts the bytes
+/// that were actually written (i.e. accepted by the inner writer).
+// Will be used in Task 3 to measure merged PDF size.
+struct CountingWriter<W: Write> {
+    inner: W,
+    count: u64,
+}
+
+#[allow(dead_code)]
+impl<W: Write> CountingWriter<W> {
+    fn new(inner: W) -> Self {
+        CountingWriter { inner, count: 0 }
+    }
+
+    fn count(&self) -> u64 {
+        self.count
+    }
+}
+
+impl<W: Write> Write for CountingWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let n = self.inner.write(buf)?;
+        self.count += n as u64;
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
 
 fn main() -> ExitCode {
     match run() {
@@ -102,4 +134,43 @@ fn load_sources(inputs: &[Input]) -> Result<Vec<(Document, Vec<u32>)>, Error> {
         sources.push((doc, selected));
     }
     Ok(sources)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn counting_writer_counts_bytes_through_to_inner() {
+        let mut sink: Vec<u8> = Vec::new();
+        let mut w = CountingWriter::new(&mut sink);
+        w.write_all(b"hello").unwrap();
+        w.write_all(b", world").unwrap();
+        w.flush().unwrap();
+        assert_eq!(w.count(), 12);
+        assert_eq!(sink, b"hello, world");
+    }
+
+    #[test]
+    fn counting_writer_partial_write_counts_only_what_was_written() {
+        struct OneByteAtATime(Vec<u8>);
+        impl Write for OneByteAtATime {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                if buf.is_empty() {
+                    return Ok(0);
+                }
+                self.0.push(buf[0]);
+                Ok(1)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut inner = OneByteAtATime(Vec::new());
+        let mut w = CountingWriter::new(&mut inner);
+        w.write_all(b"abcd").unwrap();
+        assert_eq!(w.count(), 4);
+        assert_eq!(inner.0, b"abcd");
+    }
 }
