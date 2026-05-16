@@ -2,6 +2,7 @@
 //! comma-separated combinations).
 
 use std::fmt;
+use std::fmt::Write;
 use std::ops::RangeInclusive;
 
 use thiserror::Error;
@@ -75,8 +76,7 @@ pub fn fmt_ranges(ranges: &[Range]) -> String {
         if i > 0 {
             out.push(',');
         }
-        use std::fmt::Write;
-        let _ = write!(&mut out, "{r}");
+        write!(&mut out, "{r}").unwrap();
     }
     out
 }
