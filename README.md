@@ -16,7 +16,7 @@ cargo build --release
 ## Usage
 
 ```
-pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--count-pages] [--count-bytes] [-q]
+pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--count-pages] [--count-bytes] [-q] [-v]
 ```
 
 Inputs are processed in the order given and concatenated. `-p`/`--pages`
@@ -33,6 +33,7 @@ whole file is used. `-o`/`--output` may appear anywhere; at least one of
 | `--count-pages` | Print the merged page count to stdout. Aliases: `--count-page`, `--page-count`, `--page-counts`, `--num-pages`, `--num-page`, `--npages`, `--npage` |
 | `--count-bytes` | Print the merged byte count to stdout. Aliases: `--count-byte`, `--byte-count`, `--byte-counts`, `--num-bytes`, `--num-byte`, `--nbytes`, `--nbyte` |
 | `-q`, `--quiet` | Omit the `pages: ` / `bytes: ` labels; print just the numbers (one per line). |
+| `-v`, `--verbose` | Print progress (per-input header/detail lines, `merged:`, `wrote ... (B bytes)`) to stderr. Independent of `-q`. |
 | `--` | Treat every following argument as an input file |
 
 ### Page spec
@@ -84,6 +85,12 @@ N=$(pdfcat x.pdf --count-pages -q)
   stdout (in `pages → bytes` order), and may be combined with `-o`
   or used on their own. Add `-q` / `--quiet` to drop the labels and
   emit just the numbers (one per line) for easier scripting.
+- `-v` / `--verbose` writes a progress log to stderr: one
+  `[i/N] <path>[ -p <spec>]` header line per input (flushed before
+  loading so failures are attributable), an indented detail line with
+  the page totals, a `merged: <M> pages` line after merging, and (if
+  writing a file) `wrote <path> (<B> bytes)`. This log is independent
+  of `-q`; the two flags may be combined.
 - Pages keep their original size; mixing different page sizes is fine.
 - Inherited page attributes (`Resources`, `MediaBox`, `CropBox`, `Rotate`) are
   flattened onto each page so geometry survives the merge.

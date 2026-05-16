@@ -1,7 +1,7 @@
 pdfcat - concatenate PDFs and extract pages
 
 USAGE:
-    pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--count-pages] [--count-bytes] [-q]
+    pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--count-pages] [--count-bytes] [-q] [-v]
 
     At least one of -o, --count-pages, --count-bytes must be given.
 
@@ -19,6 +19,9 @@ OPTIONS:
                             --nbytes, ...)
     -q, --quiet             Omit the `pages: ` / `bytes: ` labels and
                             print just the numbers (one per line)
+    -v, --verbose           Print progress to stderr: per-input header
+                            and detail lines, the merged page count, and
+                            the byte count written. Independent of -q.
     --                      Treat every following argument as an input file
 
 PAGE SPEC (1-based, comma-separated, trailing comma optional):
