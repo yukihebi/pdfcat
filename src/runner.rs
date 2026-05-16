@@ -150,7 +150,7 @@ fn execute_run<R: Write, W: Write>(
 /// Write the merged document to `path` via a `CountingWriter` (so the byte
 /// count is always available for `--count-bytes` and the verbose `wrote`
 /// line). Emits the labelled byte count to `report` when `opts.count_bytes`,
-/// and the verbose `wrote ... (B bytes)` line when `vlog.enabled()`.
+/// and the verbose `wrote ... (B bytes)` line when verbose is enabled.
 fn write_to_file<R: Write, W: Write>(
     merged: &mut Document,
     path: &str,
