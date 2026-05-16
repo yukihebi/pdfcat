@@ -79,6 +79,19 @@ enum Error {
     ReportIo(std::io::Error),
 }
 
+fn write_count(
+    report: &mut impl Write,
+    label: &str,
+    n: impl std::fmt::Display,
+    quiet: bool,
+) -> Result<(), Error> {
+    if quiet {
+        writeln!(report, "{n}").map_err(Error::ReportIo)
+    } else {
+        writeln!(report, "{label}: {n}").map_err(Error::ReportIo)
+    }
+}
+
 fn execute_run(
     merged: &mut Document,
     output: Option<&str>,
@@ -88,12 +101,7 @@ fn execute_run(
     report: &mut impl Write,
 ) -> Result<(), Error> {
     if count_pages {
-        let n = merged.get_pages().len();
-        if quiet {
-            writeln!(report, "{n}").map_err(Error::ReportIo)?;
-        } else {
-            writeln!(report, "pages: {n}").map_err(Error::ReportIo)?;
-        }
+        write_count(report, "pages", merged.get_pages().len(), quiet)?;
     }
 
     match (output, count_bytes) {
@@ -115,12 +123,7 @@ fn execute_run(
                 path: path.to_string(),
                 source,
             })?;
-            let n = w.count();
-            if quiet {
-                writeln!(report, "{n}").map_err(Error::ReportIo)?;
-            } else {
-                writeln!(report, "bytes: {n}").map_err(Error::ReportIo)?;
-            }
+            write_count(report, "bytes", w.count(), quiet)?;
         }
         (Some(path), false) => {
             merged.save(path).map_err(|source| Error::WriteOutput {
@@ -136,15 +139,10 @@ fn execute_run(
                     path: "<none>".to_string(),
                     source,
                 })?;
-            let n = w.count();
-            if quiet {
-                writeln!(report, "{n}").map_err(Error::ReportIo)?;
-            } else {
-                writeln!(report, "bytes: {n}").map_err(Error::ReportIo)?;
-            }
+            write_count(report, "bytes", w.count(), quiet)?;
         }
         (None, false) => {
-            // Only page count requested (or nothing at all); nothing more to do.
+            // Only page count requested; nothing more to do.
         }
     }
 
