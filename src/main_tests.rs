@@ -39,7 +39,7 @@ fn tiny_doc(n: usize) -> Document {
 fn execute_run_count_pages_only_writes_no_file() {
     let mut doc = tiny_doc(3);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, true, false, &mut report).unwrap();
+    execute_run(&mut doc, None, true, false, false, &mut report).unwrap();
     assert_eq!(report, b"pages: 3\n");
 }
 
@@ -53,7 +53,7 @@ fn execute_run_count_bytes_only_matches_serialized_size() {
 
     let mut doc = tiny_doc(2);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, false, true, &mut report).unwrap();
+    execute_run(&mut doc, None, false, true, false, &mut report).unwrap();
     let line = std::str::from_utf8(&report).unwrap();
     let prefix = "bytes: ";
     assert!(line.starts_with(prefix), "got {line:?}");
@@ -65,7 +65,7 @@ fn execute_run_count_bytes_only_matches_serialized_size() {
 fn execute_run_both_flags_emit_pages_then_bytes() {
     let mut doc = tiny_doc(1);
     let mut report = Vec::new();
-    execute_run(&mut doc, None, true, true, &mut report).unwrap();
+    execute_run(&mut doc, None, true, true, false, &mut report).unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     assert!(s.starts_with("pages: 1\n"), "got {s:?}");
     assert!(s.contains("\nbytes: "), "got {s:?}");
@@ -82,12 +82,62 @@ fn execute_run_writes_file_when_output_given() {
     let path = tmp.to_str().unwrap().to_string();
 
     let mut report = Vec::new();
-    execute_run(&mut doc, Some(&path), false, true, &mut report).unwrap();
+    execute_run(&mut doc, Some(&path), false, true, false, &mut report).unwrap();
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();
     let s = std::str::from_utf8(&report).unwrap();
     let reported: u64 = s.trim_start_matches("bytes: ").trim().parse().unwrap();
     assert_eq!(on_disk, reported);
+
+    let _ = std::fs::remove_file(&tmp);
+}
+
+#[test]
+fn execute_run_quiet_count_pages_omits_label() {
+    let mut doc = tiny_doc(3);
+    let mut report = Vec::new();
+    execute_run(&mut doc, None, true, false, true, &mut report).unwrap();
+    assert_eq!(report, b"3\n");
+}
+
+#[test]
+fn execute_run_quiet_count_bytes_omits_label() {
+    let mut doc_ref = tiny_doc(2);
+    let mut expected = Vec::new();
+    doc_ref.save_to(&mut expected).unwrap();
+
+    let mut doc = tiny_doc(2);
+    let mut report = Vec::new();
+    execute_run(&mut doc, None, false, true, true, &mut report).unwrap();
+    let s = std::str::from_utf8(&report).unwrap();
+    let n: usize = s.trim_end().parse().unwrap();
+    assert_eq!(n, expected.len());
+}
+
+#[test]
+fn execute_run_quiet_both_emits_two_bare_numbers() {
+    let mut doc = tiny_doc(4);
+    let mut report = Vec::new();
+    execute_run(&mut doc, None, true, true, true, &mut report).unwrap();
+    let s = std::str::from_utf8(&report).unwrap();
+    let mut lines = s.lines();
+    assert_eq!(lines.next(), Some("4"));
+    let bytes: u64 = lines.next().unwrap().parse().unwrap();
+    assert!(bytes > 0);
+    assert_eq!(lines.next(), None);
+}
+
+#[test]
+fn execute_run_quiet_no_counts_emits_nothing() {
+    let mut doc = tiny_doc(2);
+    let tmp =
+        std::env::temp_dir().join(format!("pdfcat-quiet-no-counts-{}.pdf", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    let path = tmp.to_str().unwrap().to_string();
+
+    let mut report = Vec::new();
+    execute_run(&mut doc, Some(&path), false, false, true, &mut report).unwrap();
+    assert!(report.is_empty());
 
     let _ = std::fs::remove_file(&tmp);
 }

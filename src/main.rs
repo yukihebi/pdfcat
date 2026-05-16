@@ -84,10 +84,16 @@ fn execute_run(
     output: Option<&str>,
     count_pages: bool,
     count_bytes: bool,
+    quiet: bool,
     report: &mut impl Write,
 ) -> Result<(), Error> {
     if count_pages {
-        writeln!(report, "pages: {}", merged.get_pages().len()).map_err(Error::ReportIo)?;
+        let n = merged.get_pages().len();
+        if quiet {
+            writeln!(report, "{n}").map_err(Error::ReportIo)?;
+        } else {
+            writeln!(report, "pages: {n}").map_err(Error::ReportIo)?;
+        }
     }
 
     match (output, count_bytes) {
@@ -109,7 +115,12 @@ fn execute_run(
                 path: path.to_string(),
                 source,
             })?;
-            writeln!(report, "bytes: {}", w.count()).map_err(Error::ReportIo)?;
+            let n = w.count();
+            if quiet {
+                writeln!(report, "{n}").map_err(Error::ReportIo)?;
+            } else {
+                writeln!(report, "bytes: {n}").map_err(Error::ReportIo)?;
+            }
         }
         (Some(path), false) => {
             merged.save(path).map_err(|source| Error::WriteOutput {
@@ -125,10 +136,15 @@ fn execute_run(
                     path: "<none>".to_string(),
                     source,
                 })?;
-            writeln!(report, "bytes: {}", w.count()).map_err(Error::ReportIo)?;
+            let n = w.count();
+            if quiet {
+                writeln!(report, "{n}").map_err(Error::ReportIo)?;
+            } else {
+                writeln!(report, "bytes: {n}").map_err(Error::ReportIo)?;
+            }
         }
         (None, false) => {
-            // Only page count requested; nothing more to do.
+            // Only page count requested (or nothing at all); nothing more to do.
         }
     }
 
@@ -155,7 +171,7 @@ fn run() -> Result<(), Error> {
             output,
             count_pages,
             count_bytes,
-            quiet: _quiet,
+            quiet,
         } => {
             let sources = load_sources(&inputs)?;
             let mut merged = merge::merge(sources)?;
@@ -166,6 +182,7 @@ fn run() -> Result<(), Error> {
                 output.as_deref(),
                 count_pages,
                 count_bytes,
+                quiet,
                 &mut report,
             )
         }
