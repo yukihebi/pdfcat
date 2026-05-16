@@ -44,7 +44,13 @@ fn execute_run_count_pages_only_writes_no_file() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(&mut doc, None, true, false, false, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: true,
+        count_bytes: false,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     assert_eq!(report, b"pages: 3\n");
     assert!(log.is_empty());
 }
@@ -61,7 +67,13 @@ fn execute_run_count_bytes_only_matches_serialized_size() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(&mut doc, None, false, true, false, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: false,
+        count_bytes: true,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let line = std::str::from_utf8(&report).unwrap();
     let prefix = "bytes: ";
     assert!(line.starts_with(prefix), "got {line:?}");
@@ -76,7 +88,13 @@ fn execute_run_both_flags_emit_pages_then_bytes() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(&mut doc, None, true, true, false, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: true,
+        count_bytes: true,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     assert!(s.starts_with("pages: 1\n"), "got {s:?}");
     assert!(s.contains("\nbytes: "), "got {s:?}");
@@ -96,16 +114,13 @@ fn execute_run_writes_file_when_output_given() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(
-        &mut doc,
-        Some(&path),
-        false,
-        true,
-        false,
-        &mut report,
-        &mut vlog,
-    )
-    .unwrap();
+    let opts = OutputOpts {
+        output: Some(path.as_str()),
+        count_pages: false,
+        count_bytes: true,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();
     let s = std::str::from_utf8(&report).unwrap();
@@ -122,7 +137,13 @@ fn execute_run_quiet_count_pages_omits_label() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(&mut doc, None, true, false, true, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: true,
+        count_bytes: false,
+        quiet: true,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     assert_eq!(report, b"3\n");
     assert!(log.is_empty());
 }
@@ -137,7 +158,13 @@ fn execute_run_quiet_count_bytes_omits_label() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(&mut doc, None, false, true, true, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: false,
+        count_bytes: true,
+        quiet: true,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     let n: usize = s.trim_end().parse().unwrap();
     assert_eq!(n, expected.len());
@@ -150,7 +177,13 @@ fn execute_run_quiet_both_emits_two_bare_numbers() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(&mut doc, None, true, true, true, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: true,
+        count_bytes: true,
+        quiet: true,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     let mut lines = s.lines();
     assert_eq!(lines.next(), Some("4"));
@@ -171,16 +204,13 @@ fn execute_run_quiet_no_counts_emits_nothing() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
-    execute_run(
-        &mut doc,
-        Some(&path),
-        false,
-        false,
-        true,
-        &mut report,
-        &mut vlog,
-    )
-    .unwrap();
+    let opts = OutputOpts {
+        output: Some(path.as_str()),
+        count_pages: false,
+        count_bytes: false,
+        quiet: true,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     assert!(report.is_empty());
     assert!(log.is_empty());
 
@@ -332,16 +362,13 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
-    execute_run(
-        &mut doc,
-        Some(&path),
-        false,
-        false,
-        false,
-        &mut report,
-        &mut vlog,
-    )
-    .unwrap();
+    let opts = OutputOpts {
+        output: Some(path.as_str()),
+        count_pages: false,
+        count_bytes: false,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     drop(vlog);
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();
@@ -368,7 +395,13 @@ fn execute_run_verbose_no_output_skips_wrote_line() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
-    execute_run(&mut doc, None, false, true, false, &mut report, &mut vlog).unwrap();
+    let opts = OutputOpts {
+        output: None,
+        count_pages: false,
+        count_bytes: true,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     drop(vlog);
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
@@ -388,16 +421,13 @@ fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
-    execute_run(
-        &mut doc,
-        Some(&path),
-        false,
-        true,
-        false,
-        &mut report,
-        &mut vlog,
-    )
-    .unwrap();
+    let opts = OutputOpts {
+        output: Some(path.as_str()),
+        count_pages: false,
+        count_bytes: true,
+        quiet: false,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     drop(vlog);
 
     let log_s = std::str::from_utf8(&log).unwrap();
@@ -425,16 +455,13 @@ fn execute_run_quiet_and_verbose_coexist() {
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log); // verbose
-    execute_run(
-        &mut doc,
-        Some(&path),
-        true,
-        true,
-        true, // quiet
-        &mut report,
-        &mut vlog,
-    )
-    .unwrap();
+    let opts = OutputOpts {
+        output: Some(path.as_str()),
+        count_pages: true,
+        count_bytes: true,
+        quiet: true,
+    };
+    execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     drop(vlog);
 
     let on_disk = std::fs::metadata(&tmp).unwrap().len();

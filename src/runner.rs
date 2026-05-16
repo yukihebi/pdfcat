@@ -6,6 +6,15 @@ use crate::Error;
 use crate::cli::Input;
 use crate::pages::{fmt_ranges, resolve_ranges};
 
+/// Options that control the stdout-side output: where to write (if anywhere),
+/// what to report (page count, byte count), and whether to drop the labels.
+pub(crate) struct OutputOpts<'a> {
+    pub(crate) output: Option<&'a str>,
+    pub(crate) count_pages: bool,
+    pub(crate) count_bytes: bool,
+    pub(crate) quiet: bool,
+}
+
 /// Pair of an enabled flag and a writer for the verbose stderr log.
 /// When `enabled()` is `false`, the writer is not touched.
 pub(crate) struct VerboseLog<W: Write> {
@@ -71,10 +80,7 @@ fn write_count(
 
 pub(crate) fn execute_run<R: Write, W: Write>(
     merged: &mut Document,
-    output: Option<&str>,
-    count_pages: bool,
-    count_bytes: bool,
-    quiet: bool,
+    opts: &OutputOpts<'_>,
     report: &mut R,
     vlog: &mut VerboseLog<W>,
 ) -> Result<(), Error> {
@@ -83,11 +89,11 @@ pub(crate) fn execute_run<R: Write, W: Write>(
             .map_err(Error::ReportIo)?;
     }
 
-    if count_pages {
-        write_count(report, "pages", merged.get_pages().len(), quiet)?;
+    if opts.count_pages {
+        write_count(report, "pages", merged.get_pages().len(), opts.quiet)?;
     }
 
-    match (output, count_bytes) {
+    match (opts.output, opts.count_bytes) {
         (Some(path), need_bytes) => {
             // Always go through a CountingWriter so the verbose `wrote` line
             // can include the byte count even when --count-bytes is absent.
@@ -107,7 +113,7 @@ pub(crate) fn execute_run<R: Write, W: Write>(
                 source,
             })?;
             if need_bytes {
-                write_count(report, "bytes", w.count(), quiet)?;
+                write_count(report, "bytes", w.count(), opts.quiet)?;
             }
             if vlog.enabled() {
                 writeln!(vlog.writer(), "wrote {path} ({} bytes)", w.count())
@@ -122,7 +128,7 @@ pub(crate) fn execute_run<R: Write, W: Write>(
                     path: "<none>".to_string(),
                     source,
                 })?;
-            write_count(report, "bytes", w.count(), quiet)?;
+            write_count(report, "bytes", w.count(), opts.quiet)?;
         }
         (None, false) => {
             // Only page count requested; nothing more to do.
