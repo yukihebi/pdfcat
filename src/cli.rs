@@ -15,6 +15,8 @@ pub enum CliError {
     UnknownOption(String),
     #[error("{0} expects a value")]
     MissingValue(&'static str),
+    #[error("{0} does not take a value")]
+    UnexpectedValue(&'static str),
     #[error("--output specified more than once")]
     DuplicateOutput,
     #[error("--pages must follow an input file")]
@@ -47,6 +49,7 @@ pub enum Command {
         output: Option<String>,
         count_pages: bool,
         count_bytes: bool,
+        quiet: bool,
     },
     Help,
     Version,
@@ -72,6 +75,7 @@ struct Parser<'a> {
     output: Option<String>,
     count_pages: bool,
     count_bytes: bool,
+    quiet: bool,
     /// Set once `--` is seen; everything after it is a literal input path.
     options_done: bool,
 }
@@ -85,6 +89,7 @@ impl<'a> Parser<'a> {
             output: None,
             count_pages: false,
             count_bytes: false,
+            quiet: false,
             options_done: false,
         }
     }
@@ -117,11 +122,21 @@ impl<'a> Parser<'a> {
             "-V" | "-v" | "--version" => return Ok(Some(Command::Version)),
             "-o" | "--output" => self.set_output(inline)?,
             "-p" | "-pp" | "--page" | "--pages" => self.add_pages(inline)?,
-            // No-value flags: any `=value` is silently ignored, as for --help/--version.
+            // No-value flags: any `=value` is rejected.
             "--count-pages" | "--count-page" | "--page-count" | "--page-counts" | "--num-pages"
-            | "--num-page" | "--npages" | "--npage" => self.count_pages = true,
+            | "--num-page" | "--npages" | "--npage" => {
+                Self::reject_value("--count-pages", inline)?;
+                self.count_pages = true;
+            }
             "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
-            | "--num-byte" | "--nbytes" | "--nbyte" => self.count_bytes = true,
+            | "--num-byte" | "--nbytes" | "--nbyte" => {
+                Self::reject_value("--count-bytes", inline)?;
+                self.count_bytes = true;
+            }
+            "-q" | "--quiet" => {
+                Self::reject_value("--quiet", inline)?;
+                self.quiet = true;
+            }
             _ if opt.starts_with('-') && opt != "-" => {
                 return Err(CliError::UnknownOption(opt.to_string()));
             }
@@ -160,6 +175,14 @@ impl<'a> Parser<'a> {
         Ok(value)
     }
 
+    fn reject_value(label: &'static str, inline: Option<&str>) -> Result<(), CliError> {
+        if inline.is_some() {
+            Err(CliError::UnexpectedValue(label))
+        } else {
+            Ok(())
+        }
+    }
+
     fn set_output(&mut self, inline: Option<&str>) -> Result<(), CliError> {
         let value = self.take_value("--output", inline)?;
         if self.output.is_some() {
@@ -192,6 +215,7 @@ impl<'a> Parser<'a> {
             output: self.output,
             count_pages: self.count_pages,
             count_bytes: self.count_bytes,
+            quiet: self.quiet,
         })
     }
 }

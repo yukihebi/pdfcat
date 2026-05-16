@@ -79,15 +79,29 @@ enum Error {
     ReportIo(std::io::Error),
 }
 
+fn write_count(
+    report: &mut impl Write,
+    label: &str,
+    n: impl std::fmt::Display,
+    quiet: bool,
+) -> Result<(), Error> {
+    if quiet {
+        writeln!(report, "{n}").map_err(Error::ReportIo)
+    } else {
+        writeln!(report, "{label}: {n}").map_err(Error::ReportIo)
+    }
+}
+
 fn execute_run(
     merged: &mut Document,
     output: Option<&str>,
     count_pages: bool,
     count_bytes: bool,
+    quiet: bool,
     report: &mut impl Write,
 ) -> Result<(), Error> {
     if count_pages {
-        writeln!(report, "pages: {}", merged.get_pages().len()).map_err(Error::ReportIo)?;
+        write_count(report, "pages", merged.get_pages().len(), quiet)?;
     }
 
     match (output, count_bytes) {
@@ -109,7 +123,7 @@ fn execute_run(
                 path: path.to_string(),
                 source,
             })?;
-            writeln!(report, "bytes: {}", w.count()).map_err(Error::ReportIo)?;
+            write_count(report, "bytes", w.count(), quiet)?;
         }
         (Some(path), false) => {
             merged.save(path).map_err(|source| Error::WriteOutput {
@@ -125,7 +139,7 @@ fn execute_run(
                     path: "<none>".to_string(),
                     source,
                 })?;
-            writeln!(report, "bytes: {}", w.count()).map_err(Error::ReportIo)?;
+            write_count(report, "bytes", w.count(), quiet)?;
         }
         (None, false) => {
             // Only page count requested; nothing more to do.
@@ -155,6 +169,7 @@ fn run() -> Result<(), Error> {
             output,
             count_pages,
             count_bytes,
+            quiet,
         } => {
             let sources = load_sources(&inputs)?;
             let mut merged = merge::merge(sources)?;
@@ -165,6 +180,7 @@ fn run() -> Result<(), Error> {
                 output.as_deref(),
                 count_pages,
                 count_bytes,
+                quiet,
                 &mut report,
             )
         }

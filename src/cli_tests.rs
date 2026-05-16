@@ -196,3 +196,94 @@ fn errors() {
         other => panic!("expected BadPageSpec, got {other:?}"),
     }
 }
+
+#[test]
+fn quiet_short_and_long() {
+    let parse_one = |arg: &str| match parse_args(&["a.pdf", "--count-pages", arg]).unwrap() {
+        Command::Run { quiet, .. } => quiet,
+        other => panic!("expected Run, got {other:?}"),
+    };
+    assert!(parse_one("-q"));
+    assert!(parse_one("--quiet"));
+}
+
+#[test]
+fn quiet_defaults_false() {
+    match parse_args(&["a.pdf", "--count-pages"]).unwrap() {
+        Command::Run { quiet, .. } => assert!(!quiet),
+        other => panic!("expected Run, got {other:?}"),
+    }
+}
+
+#[test]
+fn quiet_is_position_independent() {
+    let want = match parse_args(&["a.pdf", "--count-pages", "-q"]).unwrap() {
+        Command::Run { quiet, .. } => quiet,
+        other => panic!("expected Run, got {other:?}"),
+    };
+    assert!(want);
+    let want = match parse_args(&["-q", "a.pdf", "--count-pages"]).unwrap() {
+        Command::Run { quiet, .. } => quiet,
+        other => panic!("expected Run, got {other:?}"),
+    };
+    assert!(want);
+}
+
+#[test]
+fn quiet_with_only_output_parses() {
+    match parse_args(&["a.pdf", "-o", "w.pdf", "-q"]).unwrap() {
+        Command::Run {
+            quiet,
+            count_pages,
+            count_bytes,
+            output,
+            ..
+        } => {
+            assert!(quiet);
+            assert!(!count_pages);
+            assert!(!count_bytes);
+            assert_eq!(output.as_deref(), Some("w.pdf"));
+        }
+        other => panic!("expected Run, got {other:?}"),
+    }
+}
+
+#[test]
+fn quiet_alone_is_no_action() {
+    assert_eq!(parse_args(&["a.pdf", "-q"]), Err(CliError::NoAction));
+}
+
+#[test]
+fn value_less_flags_reject_inline_value() {
+    use CliError::UnexpectedValue;
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages=foo"]),
+        Err(UnexpectedValue("--count-pages"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--num-pages=foo"]),
+        Err(UnexpectedValue("--count-pages"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-bytes=foo"]),
+        Err(UnexpectedValue("--count-bytes"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--nbytes=foo"]),
+        Err(UnexpectedValue("--count-bytes"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages", "--quiet=foo"]),
+        Err(UnexpectedValue("--quiet"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages", "-q=foo"]),
+        Err(UnexpectedValue("--quiet"))
+    );
+}
+
+#[test]
+fn help_and_version_still_accept_inline_value() {
+    assert_eq!(parse_args(&["--help=foo"]), Ok(Command::Help));
+    assert_eq!(parse_args(&["--version=foo"]), Ok(Command::Version));
+}
