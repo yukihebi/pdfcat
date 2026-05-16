@@ -176,23 +176,40 @@ fn run() -> Result<(), Error> {
             count_pages,
             count_bytes,
             quiet,
-            ..
+            verbose,
         } => {
-            let mut sink = io::sink();
-            let sources = load_sources(&inputs, false, &mut sink)?;
-            let mut merged = merge::merge(sources)?;
             let stdout = io::stdout();
             let mut report = stdout.lock();
-            execute_run(
-                &mut merged,
-                output.as_deref(),
-                count_pages,
-                count_bytes,
-                quiet,
-                false,
-                &mut report,
-                &mut sink,
-            )
+            let stderr = io::stderr();
+            if verbose {
+                let mut log = stderr.lock();
+                let sources = load_sources(&inputs, true, &mut log)?;
+                let mut merged = merge::merge(sources)?;
+                execute_run(
+                    &mut merged,
+                    output.as_deref(),
+                    count_pages,
+                    count_bytes,
+                    quiet,
+                    true,
+                    &mut report,
+                    &mut log,
+                )
+            } else {
+                let mut sink = io::sink();
+                let sources = load_sources(&inputs, false, &mut sink)?;
+                let mut merged = merge::merge(sources)?;
+                execute_run(
+                    &mut merged,
+                    output.as_deref(),
+                    count_pages,
+                    count_bytes,
+                    quiet,
+                    false,
+                    &mut report,
+                    &mut sink,
+                )
+            }
         }
     }
 }
