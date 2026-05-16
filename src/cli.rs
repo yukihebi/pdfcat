@@ -19,8 +19,8 @@ pub enum CliError {
     DuplicateOutput,
     #[error("--pages must follow an input file")]
     PagesWithoutInput,
-    #[error("missing --output")]
-    MissingOutput,
+    #[error("must specify --output and/or --count-pages/--count-bytes")]
+    NoAction,
     #[error("no input files")]
     NoInputs,
     #[error("invalid page spec `{spec}`: {source}")]
@@ -42,7 +42,12 @@ pub struct Input {
 /// What the parsed command line asks pdfcat to do.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
-    Run { inputs: Vec<Input>, output: String },
+    Run {
+        inputs: Vec<Input>,
+        output: Option<String>,
+        count_pages: bool,
+        count_bytes: bool,
+    },
     Help,
     Version,
 }
@@ -65,6 +70,8 @@ struct Parser<'a> {
     pos: usize,
     inputs: Vec<Input>,
     output: Option<String>,
+    count_pages: bool,
+    count_bytes: bool,
     /// Set once `--` is seen; everything after it is a literal input path.
     options_done: bool,
 }
@@ -76,6 +83,8 @@ impl<'a> Parser<'a> {
             pos: 0,
             inputs: Vec::new(),
             output: None,
+            count_pages: false,
+            count_bytes: false,
             options_done: false,
         }
     }
@@ -108,6 +117,11 @@ impl<'a> Parser<'a> {
             "-V" | "-v" | "--version" => return Ok(Some(Command::Version)),
             "-o" | "--output" => self.set_output(inline)?,
             "-p" | "-pp" | "--page" | "--pages" => self.add_pages(inline)?,
+            // No-value flags: any `=value` is silently ignored, as for --help/--version.
+            "--count-pages" | "--count-page" | "--page-count" | "--page-counts" | "--num-pages"
+            | "--num-page" | "--npages" | "--npage" => self.count_pages = true,
+            "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
+            | "--num-byte" | "--nbytes" | "--nbyte" => self.count_bytes = true,
             _ if opt.starts_with('-') && opt != "-" => {
                 return Err(CliError::UnknownOption(opt.to_string()));
             }
@@ -167,13 +181,17 @@ impl<'a> Parser<'a> {
     }
 
     fn finish(self) -> Result<Command, CliError> {
-        let output = self.output.ok_or(CliError::MissingOutput)?;
         if self.inputs.is_empty() {
             return Err(CliError::NoInputs);
         }
+        if self.output.is_none() && !self.count_pages && !self.count_bytes {
+            return Err(CliError::NoAction);
+        }
         Ok(Command::Run {
             inputs: self.inputs,
-            output,
+            output: self.output,
+            count_pages: self.count_pages,
+            count_bytes: self.count_bytes,
         })
     }
 }
@@ -186,9 +204,9 @@ mod tests {
         parse(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>())
     }
 
-    fn run_command(args: &[&str]) -> (Vec<Input>, String) {
+    fn run_command(args: &[&str]) -> (Vec<Input>, Option<String>) {
         match parse_args(args).unwrap() {
-            Command::Run { inputs, output } => (inputs, output),
+            Command::Run { inputs, output, .. } => (inputs, output),
             other => panic!("expected Run, got {other:?}"),
         }
     }
@@ -196,7 +214,7 @@ mod tests {
     #[test]
     fn concatenation() {
         let (inputs, output) = run_command(&["a.pdf", "b.pdf", "c.pdf", "-o", "w.pdf"]);
-        assert_eq!(output, "w.pdf");
+        assert_eq!(output.as_deref(), Some("w.pdf"));
         assert_eq!(
             inputs.iter().map(|i| i.path.as_str()).collect::<Vec<_>>(),
             ["a.pdf", "b.pdf", "c.pdf"]
@@ -219,9 +237,18 @@ mod tests {
 
     #[test]
     fn inline_and_positional_output() {
-        assert_eq!(run_command(&["a.pdf", "-o=w.pdf"]).1, "w.pdf");
-        assert_eq!(run_command(&["-o", "w.pdf", "a.pdf"]).1, "w.pdf");
-        assert_eq!(run_command(&["a.pdf", "--output=w.pdf"]).1, "w.pdf");
+        assert_eq!(
+            run_command(&["a.pdf", "-o=w.pdf"]).1.as_deref(),
+            Some("w.pdf")
+        );
+        assert_eq!(
+            run_command(&["-o", "w.pdf", "a.pdf"]).1.as_deref(),
+            Some("w.pdf")
+        );
+        assert_eq!(
+            run_command(&["a.pdf", "--output=w.pdf"]).1.as_deref(),
+            Some("w.pdf")
+        );
     }
 
     #[test]
@@ -238,7 +265,7 @@ mod tests {
     #[test]
     fn double_dash_ends_options() {
         let (inputs, output) = run_command(&["-o", "w.pdf", "--", "-weird.pdf", "--also.pdf"]);
-        assert_eq!(output, "w.pdf");
+        assert_eq!(output.as_deref(), Some("w.pdf"));
         assert_eq!(
             inputs.iter().map(|i| i.path.as_str()).collect::<Vec<_>>(),
             ["-weird.pdf", "--also.pdf"]
@@ -277,9 +304,74 @@ mod tests {
     }
 
     #[test]
+    fn count_flags_and_aliases() {
+        let parse_one = |arg: &str| match parse_args(&["a.pdf", arg]).unwrap() {
+            Command::Run {
+                count_pages,
+                count_bytes,
+                output,
+                ..
+            } => (count_pages, count_bytes, output),
+            other => panic!("expected Run, got {other:?}"),
+        };
+
+        for alias in [
+            "--count-pages",
+            "--count-page",
+            "--page-count",
+            "--page-counts",
+            "--num-pages",
+            "--num-page",
+            "--npages",
+            "--npage",
+        ] {
+            let (cp, cb, out) = parse_one(alias);
+            assert!(cp, "{alias} should set count_pages");
+            assert!(!cb, "{alias} should not set count_bytes");
+            assert!(out.is_none(), "{alias} should not require -o");
+        }
+
+        for alias in [
+            "--count-bytes",
+            "--count-byte",
+            "--byte-count",
+            "--byte-counts",
+            "--num-bytes",
+            "--num-byte",
+            "--nbytes",
+            "--nbyte",
+        ] {
+            let (cp, cb, out) = parse_one(alias);
+            assert!(!cp, "{alias} should not set count_pages");
+            assert!(cb, "{alias} should set count_bytes");
+            assert!(out.is_none(), "{alias} should not require -o");
+        }
+
+        match parse_args(&["a.pdf", "--count-pages", "--count-bytes", "-o", "w.pdf"]).unwrap() {
+            Command::Run {
+                count_pages,
+                count_bytes,
+                output,
+                ..
+            } => {
+                assert!(count_pages);
+                assert!(count_bytes);
+                assert_eq!(output.as_deref(), Some("w.pdf"));
+            }
+            other => panic!("expected Run, got {other:?}"),
+        }
+
+        // Repeating equivalent aliases is idempotent (no DuplicateOutput-style error).
+        match parse_args(&["a.pdf", "--count-pages", "--num-pages"]).unwrap() {
+            Command::Run { count_pages, .. } => assert!(count_pages),
+            other => panic!("expected Run, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn errors() {
         use CliError::*;
-        assert_eq!(parse_args(&["a.pdf"]), Err(MissingOutput));
+        assert_eq!(parse_args(&["a.pdf"]), Err(NoAction));
         assert_eq!(parse_args(&["-o", "w.pdf"]), Err(NoInputs));
         assert_eq!(
             parse_args(&["a.pdf", "-o", "w.pdf", "-o", "x.pdf"]),
