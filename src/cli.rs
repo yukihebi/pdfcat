@@ -15,6 +15,8 @@ pub enum CliError {
     UnknownOption(String),
     #[error("{0} expects a value")]
     MissingValue(&'static str),
+    #[error("{0} does not take a value")]
+    UnexpectedValue(&'static str),
     #[error("--output specified more than once")]
     DuplicateOutput,
     #[error("--pages must follow an input file")]
@@ -120,12 +122,21 @@ impl<'a> Parser<'a> {
             "-V" | "-v" | "--version" => return Ok(Some(Command::Version)),
             "-o" | "--output" => self.set_output(inline)?,
             "-p" | "-pp" | "--page" | "--pages" => self.add_pages(inline)?,
-            // No-value flags: any `=value` is silently ignored, as for --help/--version.
+            // No-value flags: any `=value` is rejected.
             "--count-pages" | "--count-page" | "--page-count" | "--page-counts" | "--num-pages"
-            | "--num-page" | "--npages" | "--npage" => self.count_pages = true,
+            | "--num-page" | "--npages" | "--npage" => {
+                Self::reject_value("--count-pages", inline)?;
+                self.count_pages = true;
+            }
             "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
-            | "--num-byte" | "--nbytes" | "--nbyte" => self.count_bytes = true,
-            "-q" | "--quiet" => self.quiet = true,
+            | "--num-byte" | "--nbytes" | "--nbyte" => {
+                Self::reject_value("--count-bytes", inline)?;
+                self.count_bytes = true;
+            }
+            "-q" | "--quiet" => {
+                Self::reject_value("--quiet", inline)?;
+                self.quiet = true;
+            }
             _ if opt.starts_with('-') && opt != "-" => {
                 return Err(CliError::UnknownOption(opt.to_string()));
             }
@@ -162,6 +173,14 @@ impl<'a> Parser<'a> {
             return Err(CliError::MissingValue(label));
         }
         Ok(value)
+    }
+
+    fn reject_value(label: &'static str, inline: Option<&str>) -> Result<(), CliError> {
+        if inline.is_some() {
+            Err(CliError::UnexpectedValue(label))
+        } else {
+            Ok(())
+        }
     }
 
     fn set_output(&mut self, inline: Option<&str>) -> Result<(), CliError> {

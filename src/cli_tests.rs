@@ -252,3 +252,38 @@ fn quiet_with_only_output_parses() {
 fn quiet_alone_is_no_action() {
     assert_eq!(parse_args(&["a.pdf", "-q"]), Err(CliError::NoAction));
 }
+
+#[test]
+fn value_less_flags_reject_inline_value() {
+    use CliError::UnexpectedValue;
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages=foo"]),
+        Err(UnexpectedValue("--count-pages"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--num-pages=foo"]),
+        Err(UnexpectedValue("--count-pages"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-bytes=foo"]),
+        Err(UnexpectedValue("--count-bytes"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--nbytes=foo"]),
+        Err(UnexpectedValue("--count-bytes"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages", "--quiet=foo"]),
+        Err(UnexpectedValue("--quiet"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages", "-q=foo"]),
+        Err(UnexpectedValue("--quiet"))
+    );
+}
+
+#[test]
+fn help_and_version_still_accept_inline_value() {
+    assert_eq!(parse_args(&["--help=foo"]), Ok(Command::Help));
+    assert_eq!(parse_args(&["--version=foo"]), Ok(Command::Version));
+}
