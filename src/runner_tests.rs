@@ -301,9 +301,9 @@ fn write_tiny_pdf(n: usize, name: &str) -> std::path::PathBuf {
 #[test]
 fn load_sources_verbose_logs_header_and_detail_with_pages() {
     let path = write_tiny_pdf(5, "load-verbose-pages");
-    let inputs = vec![cli::Input {
+    let inputs = vec![crate::cli::Input {
         path: path.to_str().unwrap().to_string(),
-        ranges: Some(pages::parse_ranges("1,3").unwrap()),
+        ranges: Some(crate::pages::parse_ranges("1,3").unwrap()),
     }];
     let mut log = Vec::new();
     load_sources(&inputs, true, &mut log).unwrap();
@@ -319,7 +319,7 @@ fn load_sources_verbose_logs_header_and_detail_with_pages() {
 #[test]
 fn load_sources_verbose_uses_all_when_ranges_absent() {
     let path = write_tiny_pdf(3, "load-verbose-all");
-    let inputs = vec![cli::Input {
+    let inputs = vec![crate::cli::Input {
         path: path.to_str().unwrap().to_string(),
         ranges: None,
     }];
@@ -338,8 +338,8 @@ fn load_sources_verbose_uses_all_when_ranges_absent() {
 fn load_sources_verbose_pads_header_index() {
     let path = write_tiny_pdf(2, "load-verbose-padded");
     let p = path.to_str().unwrap().to_string();
-    let inputs: Vec<cli::Input> = (0..10)
-        .map(|_| cli::Input {
+    let inputs: Vec<crate::cli::Input> = (0..10)
+        .map(|_| crate::cli::Input {
             path: p.clone(),
             ranges: None,
         })
@@ -355,7 +355,7 @@ fn load_sources_verbose_pads_header_index() {
 #[test]
 fn load_sources_silent_when_verbose_false() {
     let path = write_tiny_pdf(2, "load-silent");
-    let inputs = vec![cli::Input {
+    let inputs = vec![crate::cli::Input {
         path: path.to_str().unwrap().to_string(),
         ranges: None,
     }];
