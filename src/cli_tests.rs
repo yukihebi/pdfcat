@@ -99,7 +99,6 @@ fn help_and_version_short_circuit() {
     assert_eq!(parse_args(&["-h"]), Ok(Command::Help));
     assert_eq!(parse_args(&["a.pdf", "--help", "-o"]), Ok(Command::Help));
     assert_eq!(parse_args(&["--version"]), Ok(Command::Version));
-    assert_eq!(parse_args(&["-v"]), Ok(Command::Version));
     assert_eq!(parse_args(&["-V"]), Ok(Command::Version));
 }
 
@@ -286,4 +285,68 @@ fn value_less_flags_reject_inline_value() {
 fn help_and_version_still_accept_inline_value() {
     assert_eq!(parse_args(&["--help=foo"]), Ok(Command::Help));
     assert_eq!(parse_args(&["--version=foo"]), Ok(Command::Version));
+}
+
+#[test]
+fn verbose_short_and_long() {
+    let parse_one = |arg: &str| match parse_args(&["a.pdf", "--count-pages", arg]).unwrap() {
+        Command::Run { verbose, .. } => verbose,
+        other => panic!("expected Run, got {other:?}"),
+    };
+    assert!(parse_one("-v"));
+    assert!(parse_one("--verbose"));
+}
+
+#[test]
+fn verbose_defaults_false() {
+    match parse_args(&["a.pdf", "--count-pages"]).unwrap() {
+        Command::Run { verbose, .. } => assert!(!verbose),
+        other => panic!("expected Run, got {other:?}"),
+    }
+}
+
+#[test]
+fn verbose_is_position_independent() {
+    for args in [
+        &["-v", "a.pdf", "--count-pages"][..],
+        &["a.pdf", "-v", "--count-pages"][..],
+        &["a.pdf", "--count-pages", "-v"][..],
+        &["a.pdf", "-o", "w.pdf", "--verbose"][..],
+    ] {
+        match parse_args(args).unwrap() {
+            Command::Run { verbose, .. } => assert!(verbose, "args = {args:?}"),
+            other => panic!("expected Run, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn verbose_and_quiet_coexist() {
+    match parse_args(&["a.pdf", "--count-pages", "-q", "-v"]).unwrap() {
+        Command::Run { quiet, verbose, .. } => {
+            assert!(quiet);
+            assert!(verbose);
+        }
+        other => panic!("expected Run, got {other:?}"),
+    }
+    match parse_args(&["a.pdf", "--count-pages", "-v", "-q"]).unwrap() {
+        Command::Run { quiet, verbose, .. } => {
+            assert!(quiet);
+            assert!(verbose);
+        }
+        other => panic!("expected Run, got {other:?}"),
+    }
+}
+
+#[test]
+fn verbose_rejects_inline_value() {
+    use CliError::UnexpectedValue;
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages", "-v=foo"]),
+        Err(UnexpectedValue("--verbose"))
+    );
+    assert_eq!(
+        parse_args(&["a.pdf", "--count-pages", "--verbose=foo"]),
+        Err(UnexpectedValue("--verbose"))
+    );
 }

@@ -1,6 +1,8 @@
 //! Parsing and resolution of page-selection specs (`1`, `-N`, `N-`, `N-M`,
 //! comma-separated combinations).
 
+use std::fmt;
+use std::fmt::Write;
 use std::ops::RangeInclusive;
 
 use thiserror::Error;
@@ -53,6 +55,29 @@ impl Range {
         }
         Ok(self.start..=end)
     }
+}
+
+impl fmt::Display for Range {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.end {
+            Some(e) if e == self.start => write!(f, "{}", self.start),
+            Some(e) => write!(f, "{}-{}", self.start, e),
+            None => write!(f, "{}-", self.start),
+        }
+    }
+}
+
+/// Re-format a parsed range list as a comma-separated spec, preserving
+/// order and duplicates. Used by the verbose header.
+pub fn fmt_ranges(ranges: &[Range]) -> String {
+    let mut out = String::new();
+    for (i, r) in ranges.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        write!(&mut out, "{r}").unwrap();
+    }
+    out
 }
 
 /// Parse a page spec like `-2,4-,7` into range tokens (order preserved).

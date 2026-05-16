@@ -50,6 +50,7 @@ pub enum Command {
         count_pages: bool,
         count_bytes: bool,
         quiet: bool,
+        verbose: bool,
     },
     Help,
     Version,
@@ -76,6 +77,7 @@ struct Parser<'a> {
     count_pages: bool,
     count_bytes: bool,
     quiet: bool,
+    verbose: bool,
     /// Set once `--` is seen; everything after it is a literal input path.
     options_done: bool,
 }
@@ -90,6 +92,7 @@ impl<'a> Parser<'a> {
             count_pages: false,
             count_bytes: false,
             quiet: false,
+            verbose: false,
             options_done: false,
         }
     }
@@ -119,7 +122,7 @@ impl<'a> Parser<'a> {
         let (opt, inline) = split_inline(arg);
         match opt {
             "-h" | "--help" => return Ok(Some(Command::Help)),
-            "-V" | "-v" | "--version" => return Ok(Some(Command::Version)),
+            "-V" | "--version" => return Ok(Some(Command::Version)),
             "-o" | "--output" => self.set_output(inline)?,
             "-p" | "-pp" | "--page" | "--pages" => self.add_pages(inline)?,
             // No-value flags: any `=value` is rejected.
@@ -136,6 +139,10 @@ impl<'a> Parser<'a> {
             "-q" | "--quiet" => {
                 Self::reject_value("--quiet", inline)?;
                 self.quiet = true;
+            }
+            "-v" | "--verbose" => {
+                Self::reject_value("--verbose", inline)?;
+                self.verbose = true;
             }
             _ if opt.starts_with('-') && opt != "-" => {
                 return Err(CliError::UnknownOption(opt.to_string()));
@@ -216,6 +223,7 @@ impl<'a> Parser<'a> {
             count_pages: self.count_pages,
             count_bytes: self.count_bytes,
             quiet: self.quiet,
+            verbose: self.verbose,
         })
     }
 }
