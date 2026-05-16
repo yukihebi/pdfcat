@@ -3,13 +3,13 @@ mod merge;
 mod pages;
 mod runner;
 
-use std::io;
 use std::process::ExitCode;
 
 use thiserror::Error;
 
+use cli::Command;
 use pages::PageSpecError;
-use runner::{OutputOpts, VerboseLog, execute_run, load_sources};
+use runner::OutputOpts;
 
 fn main() -> ExitCode {
     match run() {
@@ -57,15 +57,15 @@ fn run() -> Result<(), Error> {
     }
 
     match cli::parse(&args)? {
-        cli::Command::Help => {
+        Command::Help => {
             print!("{}", cli::HELP);
             Ok(())
         }
-        cli::Command::Version => {
+        Command::Version => {
             println!("pdfcat {}", cli::VERSION);
             Ok(())
         }
-        cli::Command::Run {
+        Command::Run {
             inputs,
             output,
             count_pages,
@@ -73,26 +73,13 @@ fn run() -> Result<(), Error> {
             quiet,
             verbose,
         } => {
-            let stdout = io::stdout();
-            let mut report = stdout.lock();
             let opts = OutputOpts {
                 output: output.as_deref(),
                 count_pages,
                 count_bytes,
                 quiet,
             };
-            let stderr = io::stderr();
-            if verbose {
-                let mut vlog = VerboseLog::new(true, stderr.lock());
-                let sources = load_sources(&inputs, &mut vlog)?;
-                let mut merged = merge::merge(sources)?;
-                execute_run(&mut merged, &opts, &mut report, &mut vlog)
-            } else {
-                let mut vlog = VerboseLog::new(false, io::sink());
-                let sources = load_sources(&inputs, &mut vlog)?;
-                let mut merged = merge::merge(sources)?;
-                execute_run(&mut merged, &opts, &mut report, &mut vlog)
-            }
+            runner::run_pipeline(&inputs, &opts, verbose)
         }
     }
 }

@@ -1,9 +1,11 @@
-use std::io::{self, Write};
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
 
 use lopdf::Document;
 
 use crate::Error;
 use crate::cli::Input;
+use crate::merge;
 use crate::pages::{fmt_ranges, resolve_ranges};
 
 /// Options that control the stdout-side output: where to write (if anywhere),
@@ -78,7 +80,7 @@ fn write_count(
     }
 }
 
-pub(crate) fn execute_run<R: Write, W: Write>(
+fn execute_run<R: Write, W: Write>(
     merged: &mut Document,
     opts: &OutputOpts<'_>,
     report: &mut R,
@@ -97,11 +99,11 @@ pub(crate) fn execute_run<R: Write, W: Write>(
         (Some(path), need_bytes) => {
             // Always go through a CountingWriter so the verbose `wrote` line
             // can include the byte count even when --count-bytes is absent.
-            let file = std::fs::File::create(path).map_err(|source| Error::WriteOutput {
+            let file = File::create(path).map_err(|source| Error::WriteOutput {
                 path: path.to_string(),
                 source,
             })?;
-            let mut w = CountingWriter::new(std::io::BufWriter::new(file));
+            let mut w = CountingWriter::new(BufWriter::new(file));
             merged
                 .save_to(&mut w)
                 .map_err(|source| Error::WriteOutput {
@@ -142,7 +144,7 @@ pub(crate) fn execute_run<R: Write, W: Write>(
 /// page count. When `vlog.enabled()` is true, write a header line to the log
 /// *before* loading each file (so failures are attributable) and a detail line
 /// after.
-pub(crate) fn load_sources<W: Write>(
+fn load_sources<W: Write>(
     inputs: &[Input],
     vlog: &mut VerboseLog<W>,
 ) -> Result<Vec<(Document, Vec<u32>)>, Error> {
@@ -203,6 +205,27 @@ pub(crate) fn load_sources<W: Write>(
 fn fmt_header_index(i: usize, total: usize) -> String {
     let width = total.to_string().len();
     format!("[{i:>width$}/{total}]")
+}
+
+pub(crate) fn run_pipeline(
+    inputs: &[Input],
+    opts: &OutputOpts<'_>,
+    verbose: bool,
+) -> Result<(), Error> {
+    let stdout = io::stdout();
+    let mut report = stdout.lock();
+    let stderr = io::stderr();
+    if verbose {
+        let mut vlog = VerboseLog::new(true, stderr.lock());
+        let sources = load_sources(inputs, &mut vlog)?;
+        let mut merged = merge::merge(sources)?;
+        execute_run(&mut merged, opts, &mut report, &mut vlog)
+    } else {
+        let mut vlog = VerboseLog::new(false, io::sink());
+        let sources = load_sources(inputs, &mut vlog)?;
+        let mut merged = merge::merge(sources)?;
+        execute_run(&mut merged, opts, &mut report, &mut vlog)
+    }
 }
 
 #[cfg(test)]
