@@ -81,3 +81,57 @@ fn error_messages() {
         "page 4 is out of range (document has 3 pages)"
     );
 }
+
+#[test]
+fn range_display_single() {
+    let r = Range {
+        start: 3,
+        end: Some(3),
+    };
+    assert_eq!(r.to_string(), "3");
+}
+
+#[test]
+fn range_display_open_ended() {
+    let r = Range {
+        start: 4,
+        end: None,
+    };
+    assert_eq!(r.to_string(), "4-");
+}
+
+#[test]
+fn range_display_closed_pair() {
+    let r = Range {
+        start: 2,
+        end: Some(5),
+    };
+    assert_eq!(r.to_string(), "2-5");
+}
+
+#[test]
+fn range_display_parsed_leading_dash_becomes_one_dash_n() {
+    // The parser normalises "-N" into Range { start: 1, end: Some(N) },
+    // so re-formatting emits "1-N" rather than "-N".
+    let parsed = parse_ranges("-3").unwrap();
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0].to_string(), "1-3");
+}
+
+#[test]
+fn fmt_ranges_joins_with_commas_preserving_order_and_dupes() {
+    let parsed = parse_ranges("1,1,2,4-").unwrap();
+    assert_eq!(fmt_ranges(&parsed), "1,1,2,4-");
+}
+
+#[test]
+fn fmt_ranges_strips_trailing_comma_input() {
+    let parsed = parse_ranges("1-3,5,").unwrap();
+    assert_eq!(fmt_ranges(&parsed), "1-3,5");
+}
+
+#[test]
+fn fmt_ranges_single_token() {
+    let parsed = parse_ranges("7").unwrap();
+    assert_eq!(fmt_ranges(&parsed), "7");
+}
