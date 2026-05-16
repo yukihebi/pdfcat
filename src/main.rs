@@ -155,6 +155,7 @@ fn run() -> Result<(), Error> {
             output,
             count_pages,
             count_bytes,
+            quiet: _quiet,
         } => {
             let sources = load_sources(&inputs)?;
             let mut merged = merge::merge(sources)?;

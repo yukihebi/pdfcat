@@ -47,6 +47,7 @@ pub enum Command {
         output: Option<String>,
         count_pages: bool,
         count_bytes: bool,
+        quiet: bool,
     },
     Help,
     Version,
@@ -72,6 +73,7 @@ struct Parser<'a> {
     output: Option<String>,
     count_pages: bool,
     count_bytes: bool,
+    quiet: bool,
     /// Set once `--` is seen; everything after it is a literal input path.
     options_done: bool,
 }
@@ -85,6 +87,7 @@ impl<'a> Parser<'a> {
             output: None,
             count_pages: false,
             count_bytes: false,
+            quiet: false,
             options_done: false,
         }
     }
@@ -122,6 +125,7 @@ impl<'a> Parser<'a> {
             | "--num-page" | "--npages" | "--npage" => self.count_pages = true,
             "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
             | "--num-byte" | "--nbytes" | "--nbyte" => self.count_bytes = true,
+            "-q" | "--quiet" => self.quiet = true,
             _ if opt.starts_with('-') && opt != "-" => {
                 return Err(CliError::UnknownOption(opt.to_string()));
             }
@@ -192,6 +196,7 @@ impl<'a> Parser<'a> {
             output: self.output,
             count_pages: self.count_pages,
             count_bytes: self.count_bytes,
+            quiet: self.quiet,
         })
     }
 }
