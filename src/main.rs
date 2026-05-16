@@ -170,6 +170,7 @@ fn run() -> Result<(), Error> {
             count_pages,
             count_bytes,
             quiet,
+            ..
         } => {
             let sources = load_sources(&inputs)?;
             let mut merged = merge::merge(sources)?;
