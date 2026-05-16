@@ -1,3 +1,4 @@
+use std::fmt;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 
@@ -18,7 +19,7 @@ pub(crate) struct OutputOpts<'a> {
 }
 
 /// Pair of an enabled flag and a writer for the verbose stderr log.
-/// When `enabled()` is `false`, the writer is not touched.
+/// All methods are no-ops when `enabled` is `false`.
 struct VerboseLog<W: Write> {
     enabled: bool,
     inner: W,
@@ -26,15 +27,64 @@ struct VerboseLog<W: Write> {
 
 impl<W: Write> VerboseLog<W> {
     fn new(enabled: bool, inner: W) -> Self {
-        VerboseLog { enabled, inner }
+        Self { enabled, inner }
     }
 
-    fn enabled(&self) -> bool {
-        self.enabled
+    /// Append a formatted line + `\n` to the log. No-op when disabled.
+    fn log(&mut self, args: fmt::Arguments<'_>) -> Result<(), Error> {
+        if !self.enabled {
+            return Ok(());
+        }
+        writeln!(self.inner, "{args}").map_err(Error::ReportIo)
     }
 
-    fn writer(&mut self) -> &mut W {
-        &mut self.inner
+    /// Flush the underlying writer. No-op when disabled.
+    fn flush(&mut self) -> Result<(), Error> {
+        if !self.enabled {
+            return Ok(());
+        }
+        self.inner.flush().map_err(Error::ReportIo)
+    }
+
+    /// Emit the `merged: N pages` line (after merging is complete).
+    fn log_merged(&mut self, page_count: usize) -> Result<(), Error> {
+        self.log(format_args!("merged: {page_count} pages"))
+    }
+
+    /// Emit `wrote <path> (<B> bytes)` after a successful file write.
+    fn log_wrote(&mut self, path: &str, bytes: u64) -> Result<(), Error> {
+        self.log(format_args!("wrote {path} ({bytes} bytes)"))
+    }
+
+    /// Emit `[i/N] <path>[ -p <spec>]` *and flush*, so that a subsequent
+    /// `Document::load` failure is attributable to this input.
+    fn log_input_header(&mut self, idx: usize, total: usize, input: &Input) -> Result<(), Error> {
+        let head = fmt_header_index(idx, total);
+        match &input.ranges {
+            Some(ranges) => self.log(format_args!(
+                "{head} {} -p {}",
+                input.path,
+                fmt_ranges(ranges)
+            ))?,
+            None => self.log(format_args!("{head} {}", input.path))?,
+        }
+        self.flush()
+    }
+
+    /// Emit `<indent><total> pages total, <count_str>` where `count_str`
+    /// is `all` when `selected` is `None`, or `<N> selected` otherwise.
+    fn log_input_detail(
+        &mut self,
+        indent: &str,
+        total_pages: u32,
+        selected: Option<usize>,
+    ) -> Result<(), Error> {
+        match selected {
+            None => self.log(format_args!("{indent}{total_pages} pages total, all")),
+            Some(n) => self.log(format_args!(
+                "{indent}{total_pages} pages total, {n} selected"
+            )),
+        }
     }
 }
 
@@ -86,10 +136,7 @@ fn execute_run<R: Write, W: Write>(
     report: &mut R,
     vlog: &mut VerboseLog<W>,
 ) -> Result<(), Error> {
-    if vlog.enabled() {
-        writeln!(vlog.writer(), "merged: {} pages", merged.get_pages().len())
-            .map_err(Error::ReportIo)?;
-    }
+    vlog.log_merged(merged.get_pages().len())?;
     if opts.count_pages {
         write_count(report, "pages", merged.get_pages().len(), opts.quiet)?;
     }
@@ -129,9 +176,7 @@ fn write_to_file<R: Write, W: Write>(
     if opts.count_bytes {
         write_count(report, "bytes", w.count(), opts.quiet)?;
     }
-    if vlog.enabled() {
-        writeln!(vlog.writer(), "wrote {path} ({} bytes)", w.count()).map_err(Error::ReportIo)?;
-    }
+    vlog.log_wrote(path, w.count())?;
     Ok(())
 }
 
@@ -153,7 +198,7 @@ fn count_bytes_to_sink<R: Write>(
 }
 
 /// Load each input document and resolve its page selection against the actual
-/// page count. When `vlog.enabled()` is true, write a header line to the log
+/// page count. When verbose is enabled, write a header line to the log
 /// *before* loading each file (so failures are attributable) and a detail line
 /// after.
 fn load_sources<W: Write>(
@@ -169,8 +214,8 @@ fn load_sources<W: Write>(
     Ok(sources)
 }
 
-/// Load one input PDF: emit the verbose header (flushed), then load and
-/// resolve page selection, then emit the verbose detail.
+/// Load one input PDF: emit the verbose header (flushed) via `vlog`, then
+/// load and resolve page selection, then emit the verbose detail.
 fn load_one_source<W: Write>(
     input: &Input,
     idx: usize,
@@ -178,16 +223,7 @@ fn load_one_source<W: Write>(
     indent: &str,
     vlog: &mut VerboseLog<W>,
 ) -> Result<(Document, Vec<u32>), Error> {
-    if vlog.enabled() {
-        let head = fmt_header_index(idx, total);
-        let log = vlog.writer();
-        match &input.ranges {
-            Some(ranges) => writeln!(log, "{head} {} -p {}", input.path, fmt_ranges(ranges)),
-            None => writeln!(log, "{head} {}", input.path),
-        }
-        .map_err(Error::ReportIo)?;
-        log.flush().map_err(Error::ReportIo)?;
-    }
+    vlog.log_input_header(idx, total, input)?;
     let doc = Document::load(&input.path).map_err(|source| Error::ReadInput {
         path: input.path.clone(),
         source,
@@ -207,18 +243,8 @@ fn load_one_source<W: Write>(
             })?
         }
     };
-    if vlog.enabled() {
-        let count_str = if input.ranges.is_none() {
-            "all".to_string()
-        } else {
-            format!("{} selected", selected.len())
-        };
-        writeln!(
-            vlog.writer(),
-            "{indent}{total_pages} pages total, {count_str}"
-        )
-        .map_err(Error::ReportIo)?;
-    }
+    let count = input.ranges.as_ref().map(|_| selected.len());
+    vlog.log_input_detail(indent, total_pages, count)?;
     Ok((doc, selected))
 }
 

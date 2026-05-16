@@ -484,19 +484,48 @@ fn execute_run_quiet_and_verbose_coexist() {
 }
 
 #[test]
-fn verbose_log_disabled_reports_disabled() {
-    let sink = Vec::<u8>::new();
-    let vlog = VerboseLog::new(false, sink);
-    assert!(!vlog.enabled());
+fn verbose_log_disabled_writes_nothing() {
+    let mut sink = Vec::<u8>::new();
+    let mut vlog = VerboseLog::new(false, &mut sink);
+    vlog.log_merged(7).unwrap();
+    vlog.log_wrote("out.pdf", 12345).unwrap();
+    vlog.flush().unwrap();
+    drop(vlog);
+    assert!(sink.is_empty());
 }
 
 #[test]
-fn verbose_log_enabled_reports_enabled_and_exposes_writer() {
+fn verbose_log_enabled_log_merged_writes_line() {
     let mut sink = Vec::<u8>::new();
     let mut vlog = VerboseLog::new(true, &mut sink);
-    assert!(vlog.enabled());
-    use std::io::Write;
-    write!(vlog.writer(), "hello").unwrap();
+    vlog.log_merged(42).unwrap();
     drop(vlog);
-    assert_eq!(sink, b"hello");
+    assert_eq!(sink, b"merged: 42 pages\n");
+}
+
+#[test]
+fn verbose_log_enabled_log_wrote_writes_line() {
+    let mut sink = Vec::<u8>::new();
+    let mut vlog = VerboseLog::new(true, &mut sink);
+    vlog.log_wrote("out.pdf", 12345).unwrap();
+    drop(vlog);
+    assert_eq!(sink, b"wrote out.pdf (12345 bytes)\n");
+}
+
+#[test]
+fn verbose_log_enabled_log_input_detail_with_ranges() {
+    let mut sink = Vec::<u8>::new();
+    let mut vlog = VerboseLog::new(true, &mut sink);
+    vlog.log_input_detail("      ", 10, Some(3)).unwrap();
+    drop(vlog);
+    assert_eq!(sink, b"      10 pages total, 3 selected\n");
+}
+
+#[test]
+fn verbose_log_enabled_log_input_detail_all() {
+    let mut sink = Vec::<u8>::new();
+    let mut vlog = VerboseLog::new(true, &mut sink);
+    vlog.log_input_detail("      ", 5, None).unwrap();
+    drop(vlog);
+    assert_eq!(sink, b"      5 pages total, all\n");
 }
