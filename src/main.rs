@@ -62,7 +62,8 @@ fn run() -> Result<(), Error> {
             println!("pdfcat {}", cli::VERSION);
             Ok(())
         }
-        Command::Run { inputs, output } => {
+        Command::Run { inputs, output, .. } => {
+            let output = output.expect("temporary: --count-* not yet wired up");
             let sources = load_sources(&inputs)?;
             let mut merged = merge::merge(sources)?;
             merged.save(&output).map_err(|source| Error::WriteOutput {
