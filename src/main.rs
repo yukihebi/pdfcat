@@ -199,7 +199,7 @@ fn load_sources(
 ) -> Result<Vec<(Document, Vec<u32>)>, Error> {
     let mut sources = Vec::with_capacity(inputs.len());
     let total_inputs = inputs.len();
-    let indent_width = fmt_header_index(1, total_inputs).len() + 1;
+    let indent = " ".repeat(fmt_header_index(1, total_inputs).len() + 1);
     for (idx, input) in inputs.iter().enumerate() {
         if verbose {
             let head = fmt_header_index(idx + 1, total_inputs);
@@ -232,7 +232,6 @@ fn load_sources(
             }
         };
         if verbose {
-            let indent = " ".repeat(indent_width);
             let count_str = if input.ranges.is_none() {
                 "all".to_string()
             } else {
