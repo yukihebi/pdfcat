@@ -1,6 +1,9 @@
 use super::*;
 use lopdf::{Dictionary, Document, Object};
-use std::io::Write;
+use std::ffi::OsString;
+use std::fs;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 // Bring VerboseLog into scope for all tests in this file.
 use super::VerboseLog;
@@ -515,4 +518,60 @@ fn verbose_log_enabled_log_input_detail_all() {
     let mut vlog = VerboseLog::new(true, &mut sink);
     vlog.log_input_detail("      ", 5, None).unwrap();
     assert_eq!(sink, b"      5 pages total, all\n");
+}
+
+fn tmp_workdir(tag: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("pdfcat-{tag}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir(&dir).unwrap();
+    dir
+}
+
+fn siblings_of(target: &Path) -> Vec<OsString> {
+    let parent = target.parent().unwrap();
+    let target_name = target.file_name().unwrap();
+    fs::read_dir(parent)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.file_name())
+        .filter(|n| n != target_name)
+        .collect()
+}
+
+#[test]
+fn atomic_write_renames_tmp_to_target_on_success() {
+    let dir = tmp_workdir("atomic-ok");
+    let target = dir.join("out.pdf");
+
+    let count = atomic_write(target.to_str().unwrap(), |w| w.write_all(b"final bytes")).unwrap();
+    assert_eq!(count, b"final bytes".len() as u64);
+    assert_eq!(fs::read(&target).unwrap(), b"final bytes");
+
+    let leftovers = siblings_of(&target);
+    assert!(leftovers.is_empty(), "tmp leftover: {leftovers:?}");
+
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn atomic_write_preserves_existing_target_on_failure() {
+    // The hallmark of atomic write: if the save fails partway through,
+    // the pre-existing file at the destination must still be intact, and
+    // no half-written .tmp must be left behind.
+    let dir = tmp_workdir("atomic-fail");
+    let target = dir.join("out.pdf");
+    fs::write(&target, b"ORIGINAL").unwrap();
+
+    let result = atomic_write(target.to_str().unwrap(), |w| {
+        w.write_all(b"partial junk")?;
+        Err(io::Error::other("simulated mid-write failure"))
+    });
+    assert!(result.is_err(), "expected the save callback to surface");
+
+    assert_eq!(fs::read(&target).unwrap(), b"ORIGINAL");
+
+    let leftovers = siblings_of(&target);
+    assert!(leftovers.is_empty(), "tmp leftover: {leftovers:?}");
+
+    let _ = fs::remove_dir_all(&dir);
 }
