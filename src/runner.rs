@@ -249,9 +249,15 @@ fn load_one_source<W: Write>(
     vlog: &mut VerboseLog<W>,
 ) -> Result<(Document, Vec<u32>), Error> {
     vlog.log_input_header(idx, total, input)?;
-    let doc = Document::load(&input.path).map_err(|source| Error::ReadInput {
-        path: input.path.clone(),
-        source,
+    let doc = Document::load(&input.path).map_err(|source| match source {
+        lopdf::Error::IO(io) => Error::OpenInput {
+            path: input.path.clone(),
+            source: io,
+        },
+        other => Error::ParseInput {
+            path: input.path.clone(),
+            source: other,
+        },
     })?;
     let total_pages = doc.get_pages().len() as u32;
     if total_pages == 0 {

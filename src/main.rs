@@ -33,8 +33,13 @@ enum Error {
     Cli(#[from] cli::CliError),
     #[error(transparent)]
     Merge(#[from] merge::MergeError),
-    #[error("{path}: cannot read PDF: {source}")]
-    ReadInput { path: String, source: lopdf::Error },
+    #[error("{path}: cannot open: {source}")]
+    OpenInput {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("{path}: invalid PDF: {source}")]
+    ParseInput { path: String, source: lopdf::Error },
     #[error("{path}: this PDF has no pages")]
     NoPages { path: String },
     #[error("{path}: {source}")]

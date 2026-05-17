@@ -575,3 +575,38 @@ fn atomic_write_preserves_existing_target_on_failure() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn load_one_source_missing_file_returns_open_input() {
+    use crate::Error;
+    let input = crate::cli::Input {
+        path: "/nonexistent/pdfcat-test-missing.pdf".to_string(),
+        ranges: None,
+    };
+    let mut log = Vec::new();
+    let mut vlog = VerboseLog::new(false, &mut log);
+    let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
+    match err {
+        Error::OpenInput { path, .. } => assert_eq!(path, input.path),
+        other => panic!("expected OpenInput, got {other:?}"),
+    }
+}
+
+#[test]
+fn load_one_source_corrupt_file_returns_parse_input() {
+    use crate::Error;
+    let tmp = std::env::temp_dir().join(format!("pdfcat-not-a-pdf-{}.pdf", std::process::id()));
+    std::fs::write(&tmp, b"this is not a PDF").unwrap();
+    let input = crate::cli::Input {
+        path: tmp.to_str().unwrap().to_string(),
+        ranges: None,
+    };
+    let mut log = Vec::new();
+    let mut vlog = VerboseLog::new(false, &mut log);
+    let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
+    let _ = std::fs::remove_file(&tmp);
+    match err {
+        Error::ParseInput { path, .. } => assert_eq!(path, input.path),
+        other => panic!("expected ParseInput, got {other:?}"),
+    }
+}
