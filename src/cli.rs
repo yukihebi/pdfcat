@@ -32,7 +32,7 @@ pub enum CliError {
     DuplicateOutput,
     #[error("--pages must follow an input file")]
     PagesWithoutInput,
-    #[error("must specify --output and/or --count-pages/--count-bytes")]
+    #[error("must specify --output and/or --npages/--nbytes")]
     NoAction,
     #[error("no input files (need at least one PDF)")]
     NoInputs,
