@@ -51,7 +51,7 @@ enum Error {
     },
     #[error("failed to serialize merged PDF: {0}")]
     SerializeForCount(std::io::Error),
-    #[error("failed to write count to stdout: {0}")]
+    #[error("failed to write report output: {0}")]
     ReportIo(std::io::Error),
 }
 
