@@ -27,7 +27,7 @@ Quickstart:
   # Concatenate x, y, z into out.pdf
   pdfcat x.pdf y.pdf z.pdf -o out.pdf
 
-  # Take pages 1-3, 5, and 7-end of x.pdf into out.pdf
+  # Take pages 1, 2, 3, 5, and 7-end of x.pdf into out.pdf
   pdfcat x.pdf -p -3,5,7- -o out.pdf
 
   # Print the page count of x.pdf
@@ -99,7 +99,7 @@ Quickstart:
   # Concatenate x, y, z into out.pdf
   pdfcat x.pdf y.pdf z.pdf -o out.pdf
 
-  # Take pages 1-3, 5, and 7-end of x.pdf into out.pdf
+  # Take pages 1, 2, 3, 5, and 7-end of x.pdf into out.pdf
   pdfcat x.pdf -p -3,5,7- -o out.pdf
 
   # Print the page count of x.pdf
@@ -159,7 +159,7 @@ Quickstart:
   # Concatenate x, y, z into out.pdf
   pdfcat x.pdf y.pdf z.pdf -o out.pdf
 
-  # Take pages 1-3, 5, and 7-end of x.pdf into out.pdf
+  # Take pages 1, 2, 3, 5, and 7-end of x.pdf into out.pdf
   pdfcat x.pdf -p -3,5,7- -o out.pdf
 
   # Print the page count of x.pdf
