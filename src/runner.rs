@@ -213,12 +213,7 @@ fn count_bytes_to_sink<R: Write>(
     report: &mut R,
 ) -> Result<(), Error> {
     let mut w = CountingWriter::new(io::sink());
-    merged
-        .save_to(&mut w)
-        .map_err(|source| Error::WriteOutput {
-            path: "<none>".to_string(),
-            source,
-        })?;
+    merged.save_to(&mut w).map_err(Error::SerializeForCount)?;
     write_count(report, "bytes", w.count(), opts.quiet)
 }
 
