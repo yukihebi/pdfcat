@@ -33,7 +33,7 @@ impl std::fmt::Display for CliError {
                     "must specify --output and/or --count-pages/--count-bytes"
                 )
             }
-            CliError::NoInputs => write!(f, "no input files"),
+            CliError::NoInputs => write!(f, "no input files (need at least one PDF)"),
             CliError::BadPageSpec { spec, source } => match source {
                 PageSpecError::Empty => write!(f, "--pages `{spec}` has no page numbers"),
                 _ => write!(f, "invalid page spec `{spec}`: {source}"),
