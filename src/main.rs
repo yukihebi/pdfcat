@@ -15,12 +15,12 @@ use runner::OutputOpts;
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.is_empty() {
-        eprint!("{}", cli::HELP);
-        return ExitCode::FAILURE;
-    }
     match run(&args) {
         Ok(()) => ExitCode::SUCCESS,
+        Err(Error::Cli(ref cli_err)) => {
+            eprint!("{}", cli::cli_error_message(cli_err));
+            ExitCode::FAILURE
+        }
         Err(err) => {
             eprintln!("pdfcat: {err}");
             ExitCode::FAILURE

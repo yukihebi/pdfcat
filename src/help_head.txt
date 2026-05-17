@@ -1,0 +1,7 @@
+pdfcat - concatenate PDFs and extract pages
+
+Usage:
+    pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--npages] [--nbytes] [-q] [-v]
+
+    At least one of -o, --npages, --nbytes must be given.
+

@@ -1,0 +1,28 @@
+
+Options:
+    -h, --help              Print this help
+    -V, --version           Print version
+    -o, --output <FILE>     Output file
+    -p, --pages <SPEC>      Page selection for the preceding input file
+                            (aliases: --page, -pp)
+    --npages                Print the merged page count to stdout
+                            (aliases: --count-pages, --count-page,
+                            --page-count, --page-counts, --num-pages,
+                            --num-page, --npage)
+    --nbytes                Print the merged byte count to stdout
+                            (aliases: --count-bytes, --count-byte,
+                            --byte-count, --byte-counts, --num-bytes,
+                            --num-byte, --nbyte)
+    -q, --quiet             Omit the `pages: ` / `bytes: ` labels and
+                            print just the numbers (one per line)
+    -v, --verbose           Print progress to stderr: per-input header
+                            and detail lines, the merged page count, and
+                            the byte count written. Independent of -q.
+    --                      Treat every following argument as an input file
+
+Page spec (1-based, comma-separated, trailing comma optional):
+    N        page N
+    -N       pages from the first to N (inclusive)
+    N-       pages from N to the last (inclusive)
+    N-M      pages N to M (inclusive)
+    e.g.  -p 1        -p -2,4-        -p 1-3,5

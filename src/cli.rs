@@ -5,7 +5,19 @@ use thiserror::Error;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const HELP: &str = include_str!("help.txt");
+pub const HELP: &str = concat!(
+    include_str!("help_head.txt"),
+    include_str!("quickstart.txt"),
+    include_str!("help_tail.txt"),
+);
+
+pub const QUICKSTART: &str = include_str!("quickstart.txt");
+
+/// Format a CLI parse error with the Quickstart block and a pointer
+/// to `--help`, ready to write to stderr.
+pub fn cli_error_message(err: &CliError) -> String {
+    format!("pdfcat: {err}\n\n{QUICKSTART}\nRun 'pdfcat --help' for details.\n")
+}
 
 /// A malformed command line.
 #[derive(Debug, PartialEq, Eq, Error)]
@@ -20,7 +32,7 @@ pub enum CliError {
     DuplicateOutput,
     #[error("--pages must follow an input file")]
     PagesWithoutInput,
-    #[error("must specify --output and/or --count-pages/--count-bytes")]
+    #[error("must specify --output and/or --npages/--nbytes")]
     NoAction,
     #[error("no input files (need at least one PDF)")]
     NoInputs,

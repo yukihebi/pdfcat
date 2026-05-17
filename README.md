@@ -6,6 +6,22 @@ A small command-line tool to concatenate PDF files and extract pages from
 them. Written in pure Rust (using [`lopdf`](https://crates.io/crates/lopdf));
 no native dependencies.
 
+## Quickstart
+
+```sh
+# Concatenate x, y, z into out.pdf
+pdfcat x.pdf y.pdf z.pdf -o out.pdf
+
+# Take pages 1, 2, 3, 5, and 7-end of x.pdf into out.pdf
+pdfcat x.pdf -p -3,5,7- -o out.pdf
+
+# Print the page count of x.pdf
+pdfcat x.pdf --npages
+```
+
+Run `pdfcat --help` for details. The same Quickstart block is also
+printed to stderr whenever the command line cannot be parsed.
+
 ## Build
 
 ```sh
@@ -16,13 +32,13 @@ cargo build --release
 ## Usage
 
 ```
-pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--count-pages] [--count-bytes] [-q] [-v]
+pdfcat <INPUT> [-p <PAGES>] [<INPUT> [-p <PAGES>] ...] [-o <OUTPUT>] [--npages] [--nbytes] [-q] [-v]
 ```
 
 Inputs are processed in the order given and concatenated. `-p`/`--pages`
 selects pages from the *immediately preceding* input file; without it, the
 whole file is used. `-o`/`--output` may appear anywhere; at least one of
-`-o`, `--count-pages`, `--count-bytes` must be given.
+`-o`, `--npages`, `--nbytes` must be given.
 
 | Option | Description |
 | --- | --- |
@@ -30,8 +46,8 @@ whole file is used. `-o`/`--output` may appear anywhere; at least one of
 | `-V`, `--version` | Print version |
 | `-o`, `--output <FILE>` | Output file |
 | `-p`, `--pages <SPEC>` | Page selection for the preceding input (aliases: `--page`, `-pp`) |
-| `--count-pages` | Print the merged page count to stdout. Aliases: `--count-page`, `--page-count`, `--page-counts`, `--num-pages`, `--num-page`, `--npages`, `--npage` |
-| `--count-bytes` | Print the merged byte count to stdout. Aliases: `--count-byte`, `--byte-count`, `--byte-counts`, `--num-bytes`, `--num-byte`, `--nbytes`, `--nbyte` |
+| `--npages` | Print the merged page count to stdout. Aliases: `--count-pages`, `--count-page`, `--page-count`, `--page-counts`, `--num-pages`, `--num-page`, `--npage` |
+| `--nbytes` | Print the merged byte count to stdout. Aliases: `--count-bytes`, `--count-byte`, `--byte-count`, `--byte-counts`, `--num-bytes`, `--num-byte`, `--nbyte` |
 | `-q`, `--quiet` | Omit the `pages: ` / `bytes: ` labels; print just the numbers (one per line). |
 | `-v`, `--verbose` | Print progress (per-input header/detail lines, `merged:`, `wrote ... (B bytes)`) to stderr. Independent of `-q`. |
 | `--` | Treat every following argument as an input file |
@@ -53,38 +69,34 @@ order).
 
 ## Examples
 
+Each example below demonstrates one feature beyond the Quickstart block.
+
 ```sh
-# Concatenate three PDFs
-pdfcat x.pdf y.pdf z.pdf -o out.pdf
-
-# Extract page 1 of x.pdf
-pdfcat x.pdf -p 1 -o out.pdf
-
-# x.pdf without its 3rd page, then all of y.pdf
-pdfcat x.pdf -p -2,4- y.pdf -o out.pdf
-
-# Pages 1-3 of x.pdf followed by pages 5 onward of y.pdf
+# Combine ranges from multiple inputs (each -p binds to the preceding file)
 pdfcat x.pdf -p 1-3 y.pdf -p 5- -o out.pdf
 
-# An input whose name starts with '-'
-pdfcat -o out.pdf -- -scan.pdf
+# Count without writing: prints `pages: N` and `bytes: M`, one per line
+pdfcat x.pdf y.pdf --npages --nbytes
 
-# Inspect the result without writing a file
-pdfcat x.pdf y.pdf --count-pages --count-bytes
+# Numeric-only output for scripts (no labels, one number per line)
+N=$(pdfcat x.pdf --npages -q)
 
 # Write and report at the same time
-pdfcat x.pdf -p 1-3 -o out.pdf --count-bytes
+pdfcat x.pdf -p 1-3 -o out.pdf --nbytes
 
-# Numbers only, ready to pipe or assign
-N=$(pdfcat x.pdf --count-pages -q)
+# An input whose name starts with `-`
+pdfcat -o out.pdf -- -scan.pdf
+
+# Verbose progress on stderr while writing
+pdfcat x.pdf y.pdf -o out.pdf -v
 ```
 
 ## Behaviour
 
-- `--count-pages` and `--count-bytes` print one labeled line each to
-  stdout (in `pages → bytes` order), and may be combined with `-o`
-  or used on their own. Add `-q` / `--quiet` to drop the labels and
-  emit just the numbers (one per line) for easier scripting.
+- `--npages` and `--nbytes` print one labeled line each to stdout
+  (in `pages → bytes` order), and may be combined with `-o` or used
+  on their own. Add `-q` / `--quiet` to drop the labels and emit
+  just the numbers (one per line) for easier scripting.
 - `-v` / `--verbose` writes a progress log to stderr: one
   `[i/N] <path>[ -p <spec>]` header line per input (flushed before
   loading so failures are attributable), an indented detail line with

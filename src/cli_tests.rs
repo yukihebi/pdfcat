@@ -362,3 +362,59 @@ fn bad_page_spec_empty_renders_naturally() {
     let err = parse_args(&["a.pdf", "-p", ",", "-o", "w.pdf"]).unwrap_err();
     assert_eq!(err.to_string(), "--pages `,` has no page numbers");
 }
+
+#[test]
+fn quickstart_block_has_canonical_shape() {
+    let q = QUICKSTART;
+    assert!(q.starts_with("Quickstart:\n"), "got: {q:?}");
+    assert!(q.contains("pdfcat x.pdf y.pdf z.pdf -o out.pdf"));
+    assert!(q.contains("pdfcat x.pdf -p -3,5,7- -o out.pdf"));
+    assert!(q.contains("pdfcat x.pdf --npages"));
+    assert!(q.ends_with('\n'));
+}
+
+#[test]
+fn help_embeds_quickstart_verbatim() {
+    assert!(
+        HELP.contains(QUICKSTART),
+        "HELP does not contain QUICKSTART"
+    );
+}
+
+#[test]
+fn help_drops_examples_section() {
+    assert!(!HELP.contains("EXAMPLES:"), "HELP still contains EXAMPLES:");
+}
+
+#[test]
+fn help_uses_npages_nbytes_as_primary() {
+    // Primary spellings appear as left-column entries in the OPTIONS
+    // table, so they are followed by at least one space.
+    assert!(
+        HELP.contains("    --npages "),
+        "missing --npages primary row"
+    );
+    assert!(
+        HELP.contains("    --nbytes "),
+        "missing --nbytes primary row"
+    );
+    // Old spellings are kept as aliases.
+    assert!(HELP.contains("--count-pages"));
+    assert!(HELP.contains("--count-bytes"));
+}
+
+#[test]
+fn cli_error_message_appends_quickstart_and_help_hint() {
+    let err = CliError::UnknownOption("--foo".to_string());
+    let msg = cli_error_message(&err);
+    assert!(
+        msg.starts_with("pdfcat: unknown option: --foo\n"),
+        "unexpected prefix: {msg:?}"
+    );
+    assert!(msg.contains("\n\nQuickstart:\n"));
+    assert!(msg.contains("pdfcat x.pdf y.pdf z.pdf -o out.pdf"));
+    assert!(
+        msg.ends_with("\nRun 'pdfcat --help' for details.\n"),
+        "unexpected suffix: {msg:?}"
+    );
+}
