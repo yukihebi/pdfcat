@@ -229,3 +229,18 @@ fn no_catalog_error_carries_first_input_path() {
         other => panic!("expected NoCatalog, got {other:?}"),
     }
 }
+
+#[test]
+fn empty_selection_yields_zero_page_document() {
+    // With NoPages removed, asking for zero pages from a real document
+    // now produces a valid 0-page merged document. This path is unreachable
+    // from the CLI (parse_ranges rejects empty specs, and load_one_source
+    // rejects 0-page inputs), but the in-module contract is pinned here.
+    let merged = merge(vec![(
+        "src.pdf".to_string(),
+        doc_with_widths(&[10, 20]),
+        vec![],
+    )])
+    .unwrap();
+    assert_eq!(merged.get_pages().len(), 0);
+}
