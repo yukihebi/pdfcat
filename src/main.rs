@@ -12,13 +12,13 @@ use pages::PageSpecError;
 use runner::OutputOpts;
 
 fn main() -> ExitCode {
-    match run() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.is_empty() {
+        eprint!("{}", cli::HELP);
+        return ExitCode::FAILURE;
+    }
+    match run(&args) {
         Ok(()) => ExitCode::SUCCESS,
-        // Bare `pdfcat`: show usage instead of an error line.
-        Err(Error::NoArguments) => {
-            eprint!("{}", cli::HELP);
-            ExitCode::FAILURE
-        }
         Err(err) => {
             eprintln!("pdfcat: {err}");
             ExitCode::FAILURE
@@ -29,8 +29,6 @@ fn main() -> ExitCode {
 /// Anything that can stop pdfcat from producing its output.
 #[derive(Debug, Error)]
 enum Error {
-    #[error("no arguments given")]
-    NoArguments,
     #[error(transparent)]
     Cli(#[from] cli::CliError),
     #[error(transparent)]
@@ -50,13 +48,8 @@ enum Error {
     ReportIo(std::io::Error),
 }
 
-fn run() -> Result<(), Error> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.is_empty() {
-        return Err(Error::NoArguments);
-    }
-
-    match cli::parse(&args)? {
+fn run(args: &[String]) -> Result<(), Error> {
+    match cli::parse(args)? {
         Command::Help => {
             print!("{}", cli::HELP);
             Ok(())
