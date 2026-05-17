@@ -1,8 +1,10 @@
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
+use std::path::Path;
 
 use lopdf::Document;
+use tempfile::Builder;
 
 use crate::Error;
 use crate::cli::Input;
@@ -147,10 +149,11 @@ fn execute_run<R: Write, W: Write>(
     }
 }
 
-/// Write the merged document to `path` via a `CountingWriter` (so the byte
-/// count is always available for `--count-bytes` and the verbose `wrote`
-/// line). Emits the labelled byte count to `report` when `opts.count_bytes`,
-/// and the verbose `wrote ... (B bytes)` line when verbose is enabled.
+/// Write the merged document to `path` atomically: serialise to a sibling
+/// `.tmp` file first, then rename. A failure anywhere along the way leaves
+/// any pre-existing file at `path` untouched and cleans the tmp behind us.
+/// Emits the labelled byte count to `report` when `opts.count_bytes`, and
+/// the verbose `wrote ... (B bytes)` line when verbose is enabled.
 fn write_to_file<R: Write, W: Write>(
     merged: &mut Document,
     path: &str,
@@ -158,26 +161,48 @@ fn write_to_file<R: Write, W: Write>(
     report: &mut R,
     vlog: &mut VerboseLog<W>,
 ) -> Result<(), Error> {
-    let file = File::create(path).map_err(|source| Error::WriteOutput {
-        path: path.to_string(),
-        source,
-    })?;
-    let mut w = CountingWriter::new(BufWriter::new(file));
-    merged
-        .save_to(&mut w)
-        .map_err(|source| Error::WriteOutput {
+    let count = atomic_write(path, |w| merged.save_to(w))?;
+    if opts.count_bytes {
+        write_count(report, "bytes", count, opts.quiet)?;
+    }
+    vlog.log_wrote(path, count)?;
+    Ok(())
+}
+
+/// Write to a sibling tmp file via `save`, then atomically replace
+/// `final_path`. Returns the number of bytes the inner writer accepted.
+/// `NamedTempFile`'s `Drop` removes the tmp on any early return, so a
+/// failure leaves the previous contents of `final_path` (if any) intact.
+fn atomic_write<F>(final_path: &str, save: F) -> Result<u64, Error>
+where
+    F: FnOnce(&mut CountingWriter<BufWriter<&mut File>>) -> io::Result<()>,
+{
+    fn to_err(path: &str) -> impl FnOnce(io::Error) -> Error + '_ {
+        move |source| Error::WriteOutput {
             path: path.to_string(),
             source,
-        })?;
-    w.flush().map_err(|source| Error::WriteOutput {
-        path: path.to_string(),
-        source,
-    })?;
-    if opts.count_bytes {
-        write_count(report, "bytes", w.count(), opts.quiet)?;
+        }
     }
-    vlog.log_wrote(path, w.count())?;
-    Ok(())
+    let parent = Path::new(final_path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut tmp = Builder::new()
+        .prefix(".pdfcat-")
+        .suffix(".tmp")
+        .tempfile_in(parent)
+        .map_err(to_err(final_path))?;
+    let count = {
+        let mut w = CountingWriter::new(BufWriter::new(tmp.as_file_mut()));
+        save(&mut w).map_err(to_err(final_path))?;
+        w.flush().map_err(to_err(final_path))?;
+        w.count()
+    };
+    tmp.persist(final_path).map_err(|e| Error::WriteOutput {
+        path: final_path.to_string(),
+        source: e.error,
+    })?;
+    Ok(count)
 }
 
 /// Serialise `merged` to a sink just to count bytes; emits the labelled
