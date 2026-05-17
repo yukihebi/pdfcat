@@ -20,7 +20,7 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
         Err(err) => {
-            eprintln!("pdfcat: error: {err}");
+            eprintln!("pdfcat: {err}");
             ExitCode::FAILURE
         }
     }
