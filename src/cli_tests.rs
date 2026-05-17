@@ -180,6 +180,12 @@ fn errors() {
         parse_args(&["-p", "1", "a.pdf", "-o", "w.pdf"]),
         Err(PagesWithoutInput)
     );
+    // PagesWithoutInput is structural; it wins over a malformed spec
+    // since the user could not have meant to bind these pages to anything.
+    assert_eq!(
+        parse_args(&["-p", "xyz", "a.pdf", "-o", "w.pdf"]),
+        Err(PagesWithoutInput)
+    );
     assert_eq!(
         parse_args(&["a.pdf", "--frobnicate", "-o", "w.pdf"]),
         Err(UnknownOption("--frobnicate".into()))

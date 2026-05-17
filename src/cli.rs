@@ -201,11 +201,14 @@ impl<'a> Parser<'a> {
 
     fn add_pages(&mut self, inline: Option<&str>) -> Result<(), CliError> {
         let spec = self.take_value("--pages", inline)?;
+        // Check the structural error (no preceding input) before validating
+        // the spec, so a malformed `-p` with nothing to bind to still reports
+        // PagesWithoutInput rather than BadPageSpec.
+        let last = self.inputs.last_mut().ok_or(CliError::PagesWithoutInput)?;
         let ranges = parse_ranges(&spec).map_err(|source| CliError::BadPageSpec {
             spec: spec.clone(),
             source,
         })?;
-        let last = self.inputs.last_mut().ok_or(CliError::PagesWithoutInput)?;
         last.ranges.get_or_insert_with(Vec::new).extend(ranges);
         Ok(())
     }
