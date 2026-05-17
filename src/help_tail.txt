@@ -1,5 +1,5 @@
 
-OPTIONS:
+Options:
     -h, --help              Print this help
     -V, --version           Print version
     -o, --output <FILE>     Output file
@@ -20,7 +20,7 @@ OPTIONS:
                             the byte count written. Independent of -q.
     --                      Treat every following argument as an input file
 
-PAGE SPEC (1-based, comma-separated, trailing comma optional):
+Page spec (1-based, comma-separated, trailing comma optional):
     N        page N
     -N       pages from the first to N (inclusive)
     N-       pages from N to the last (inclusive)
