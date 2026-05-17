@@ -5,7 +5,11 @@ use thiserror::Error;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub const HELP: &str = include_str!("help.txt");
+pub const HELP: &str = concat!(
+    include_str!("help_head.txt"),
+    include_str!("quickstart.txt"),
+    include_str!("help_tail.txt"),
+);
 
 #[allow(dead_code)]
 pub const QUICKSTART: &str = include_str!("quickstart.txt");

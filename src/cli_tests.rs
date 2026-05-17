@@ -372,3 +372,33 @@ fn quickstart_block_has_canonical_shape() {
     assert!(q.contains("pdfcat x.pdf --npages"));
     assert!(q.ends_with('\n'));
 }
+
+#[test]
+fn help_embeds_quickstart_verbatim() {
+    assert!(
+        HELP.contains(QUICKSTART),
+        "HELP does not contain QUICKSTART"
+    );
+}
+
+#[test]
+fn help_drops_examples_section() {
+    assert!(!HELP.contains("EXAMPLES:"), "HELP still contains EXAMPLES:");
+}
+
+#[test]
+fn help_uses_npages_nbytes_as_primary() {
+    // Primary spellings appear as left-column entries in the OPTIONS
+    // table, so they are followed by at least one space.
+    assert!(
+        HELP.contains("    --npages "),
+        "missing --npages primary row"
+    );
+    assert!(
+        HELP.contains("    --nbytes "),
+        "missing --nbytes primary row"
+    );
+    // Old spellings are kept as aliases.
+    assert!(HELP.contains("--count-pages"));
+    assert!(HELP.contains("--count-bytes"));
+}
