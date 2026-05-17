@@ -16,7 +16,7 @@ pub enum CliError {
     #[error("{0} expects a value")]
     MissingValue(&'static str),
     #[error("{0} does not take a value")]
-    UnexpectedValue(&'static str),
+    UnexpectedValue(String),
     #[error("--output specified more than once")]
     DuplicateOutput,
     #[error("--pages must follow an input file")]
@@ -128,20 +128,20 @@ impl<'a> Parser<'a> {
             // No-value flags: any `=value` is rejected.
             "--count-pages" | "--count-page" | "--page-count" | "--page-counts" | "--num-pages"
             | "--num-page" | "--npages" | "--npage" => {
-                Self::reject_value("--count-pages", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.count_pages = true;
             }
             "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
             | "--num-byte" | "--nbytes" | "--nbyte" => {
-                Self::reject_value("--count-bytes", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.count_bytes = true;
             }
             "-q" | "--quiet" => {
-                Self::reject_value("--quiet", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.quiet = true;
             }
             "-v" | "--verbose" => {
-                Self::reject_value("--verbose", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.verbose = true;
             }
             _ if opt.starts_with('-') && opt != "-" => {
@@ -182,9 +182,9 @@ impl<'a> Parser<'a> {
         Ok(value)
     }
 
-    fn reject_value(label: &'static str, inline: Option<&str>) -> Result<(), CliError> {
+    fn reject_value(label: &str, inline: Option<&str>) -> Result<(), CliError> {
         if inline.is_some() {
-            Err(CliError::UnexpectedValue(label))
+            Err(CliError::UnexpectedValue(label.to_string()))
         } else {
             Ok(())
         }

@@ -263,27 +263,27 @@ fn value_less_flags_reject_inline_value() {
     use CliError::UnexpectedValue;
     assert_eq!(
         parse_args(&["a.pdf", "--count-pages=foo"]),
-        Err(UnexpectedValue("--count-pages"))
+        Err(UnexpectedValue("--count-pages".into()))
     );
     assert_eq!(
         parse_args(&["a.pdf", "--num-pages=foo"]),
-        Err(UnexpectedValue("--count-pages"))
+        Err(UnexpectedValue("--num-pages".into()))
     );
     assert_eq!(
         parse_args(&["a.pdf", "--count-bytes=foo"]),
-        Err(UnexpectedValue("--count-bytes"))
+        Err(UnexpectedValue("--count-bytes".into()))
     );
     assert_eq!(
         parse_args(&["a.pdf", "--nbytes=foo"]),
-        Err(UnexpectedValue("--count-bytes"))
+        Err(UnexpectedValue("--nbytes".into()))
     );
     assert_eq!(
         parse_args(&["a.pdf", "--count-pages", "--quiet=foo"]),
-        Err(UnexpectedValue("--quiet"))
+        Err(UnexpectedValue("--quiet".into()))
     );
     assert_eq!(
         parse_args(&["a.pdf", "--count-pages", "-q=foo"]),
-        Err(UnexpectedValue("--quiet"))
+        Err(UnexpectedValue("-q".into()))
     );
 }
 
@@ -349,10 +349,10 @@ fn verbose_rejects_inline_value() {
     use CliError::UnexpectedValue;
     assert_eq!(
         parse_args(&["a.pdf", "--count-pages", "-v=foo"]),
-        Err(UnexpectedValue("--verbose"))
+        Err(UnexpectedValue("-v".into()))
     );
     assert_eq!(
         parse_args(&["a.pdf", "--count-pages", "--verbose=foo"]),
-        Err(UnexpectedValue("--verbose"))
+        Err(UnexpectedValue("--verbose".into()))
     );
 }
