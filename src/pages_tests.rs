@@ -55,8 +55,10 @@ fn parse_errors() {
     assert_eq!(parse_ranges("-0"), Err(ZeroPage));
     assert_eq!(parse_ranges("1-2-3"), Err(InvalidNumber("2-3".into())));
     assert_eq!(parse_ranges("-"), Err(InvalidRange("-".into())));
-    assert_eq!(parse_ranges(""), Err(Empty));
-    assert_eq!(parse_ranges("   "), Err(Empty));
+    // Empty spec is no longer an error at the pages layer — callers
+    // (e.g. cli::add_pages) decide whether an empty result is meaningful.
+    assert_eq!(parse_ranges(""), Ok(vec![]));
+    assert_eq!(parse_ranges("   "), Ok(vec![]));
     assert_eq!(parse_ranges("abc"), Err(InvalidNumber("abc".into())));
 }
 

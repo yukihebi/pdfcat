@@ -7,9 +7,9 @@ use std::ops::RangeInclusive;
 
 use thiserror::Error;
 
-/// Something wrong with a page-selection spec or its resolution against a
-/// concrete page count. Callers add the surrounding context (the raw spec
-/// string, the file name) when reporting these.
+/// Something wrong with **a token** of a page-selection spec, or its
+/// resolution against a concrete page count. Callers add the surrounding
+/// context (the raw spec string, the file name) when reporting these.
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum PageSpecError {
     #[error("invalid page number `{0}`")]
@@ -18,8 +18,6 @@ pub enum PageSpecError {
     ZeroPage,
     #[error("invalid range `{0}`")]
     InvalidRange(String),
-    #[error("no pages given")]
-    Empty,
     #[error("range start {start} is after end {end}")]
     StartAfterEnd { start: u32, end: u32 },
     #[error("page {page} is out of range (document has {total} pages)")]
@@ -81,6 +79,8 @@ pub fn fmt_ranges(ranges: &[Range]) -> String {
 }
 
 /// Parse a page spec like `-2,4-,7` into range tokens (order preserved).
+/// May return an empty vec if the spec contains no page tokens (e.g. `","` or `""`);
+/// callers decide whether that is meaningful.
 pub fn parse_ranges(spec: &str) -> Result<Vec<Range>, PageSpecError> {
     let mut out = Vec::new();
     for token in spec.split(',') {
@@ -89,9 +89,6 @@ pub fn parse_ranges(spec: &str) -> Result<Vec<Range>, PageSpecError> {
             continue; // tolerate trailing/empty entries
         }
         out.push(parse_token(token)?);
-    }
-    if out.is_empty() {
-        return Err(PageSpecError::Empty);
     }
     Ok(out)
 }
