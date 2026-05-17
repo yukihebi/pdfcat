@@ -224,7 +224,7 @@ fn count_bytes_to_sink<R: Write>(
 fn load_sources<W: Write>(
     inputs: &[Input],
     vlog: &mut VerboseLog<W>,
-) -> Result<Vec<(Document, Vec<u32>)>, Error> {
+) -> Result<Vec<(String, Document, Vec<u32>)>, Error> {
     let total = inputs.len();
     let indent = " ".repeat(fmt_header_index(1, total).len() + 1);
     let mut sources = Vec::with_capacity(total);
@@ -242,7 +242,7 @@ fn load_one_source<W: Write>(
     total: usize,
     indent: &str,
     vlog: &mut VerboseLog<W>,
-) -> Result<(Document, Vec<u32>), Error> {
+) -> Result<(String, Document, Vec<u32>), Error> {
     vlog.log_input_header(idx, total, input)?;
     let doc = Document::load(&input.path).map_err(|source| match source {
         lopdf::Error::IO(io) => Error::OpenInput {
@@ -271,7 +271,7 @@ fn load_one_source<W: Write>(
     };
     let count = input.ranges.as_ref().map(|_| selected.len());
     vlog.log_input_detail(indent, total_pages, count)?;
-    Ok((doc, selected))
+    Ok((input.path.clone(), doc, selected))
 }
 
 /// Format `[i/total]` with `i` right-justified to the width of `total`.

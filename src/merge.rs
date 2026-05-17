@@ -23,25 +23,27 @@ const DROPPED_CATALOG_KEYS: [&[u8]; 5] = [
 /// Why a merge could not be produced.
 #[derive(Debug, Error)]
 pub enum MergeError {
-    #[error("no pages selected")]
-    NoPages,
-    #[error("input has no usable document catalog / page tree")]
-    NoCatalog,
-    #[error("page {0} unexpectedly missing")]
-    PageMissing(u32),
-    #[error("broken PDF object: {0}")]
-    BrokenObject(#[from] lopdf::Error),
+    #[error("{path}: input has no usable document catalog / page tree")]
+    NoCatalog { path: String },
+    #[error("{path}: page {page} unexpectedly missing")]
+    PageMissing { path: String, page: u32 },
+    #[error("{path}: broken PDF object: {source}")]
+    BrokenObject {
+        path: String,
+        #[source]
+        source: lopdf::Error,
+    },
 }
 
 /// Merge selected pages from several documents into one, preserving order.
-pub fn merge(sources: Vec<(Document, Vec<u32>)>) -> Result<Document, MergeError> {
+pub fn merge(sources: Vec<(String, Document, Vec<u32>)>) -> Result<Document, MergeError> {
     let collected = collect(sources)?;
-    if collected.pages.is_empty() {
-        return Err(MergeError::NoPages);
-    }
-    let (catalog_id, pages_id) = collected.skeleton.ok_or(MergeError::NoCatalog)?;
-    let catalog = clone_dict(&collected.objects, catalog_id)?;
-    let pages_node = clone_dict(&collected.objects, pages_id)?;
+    let Skeleton {
+        catalog_id,
+        pages_id,
+        catalog,
+        pages_node,
+    } = collected.skeleton;
 
     let (major, minor) = collected.version;
     let mut document = Document::with_version(format!("{major}.{minor}"));
@@ -63,6 +65,14 @@ pub fn merge(sources: Vec<(Document, Vec<u32>)>) -> Result<Document, MergeError>
     Ok(document)
 }
 
+/// The catalog/page-tree skeleton extracted from the first source document.
+struct Skeleton {
+    catalog_id: ObjectId,
+    pages_id: ObjectId,
+    catalog: Dictionary,
+    pages_node: Dictionary,
+}
+
 /// Renumbered objects and the selected pages gathered from all source docs.
 struct Collected {
     /// Selected pages in output order, as (object id, flattened dict). A page
@@ -70,8 +80,8 @@ struct Collected {
     pages: Vec<(ObjectId, Dictionary)>,
     /// Every object from every source, with globally unique ids.
     objects: BTreeMap<ObjectId, Object>,
-    /// `(catalog id, page-tree root id)` taken from the first source's trailer.
-    skeleton: Option<(ObjectId, ObjectId)>,
+    /// Catalog and page-tree root taken from the first source's trailer.
+    skeleton: Skeleton,
     /// First `/Info` dictionary id seen, carried over to the merged trailer.
     info_id: Option<ObjectId>,
     /// Highest object id used so far, plus one.
@@ -80,54 +90,119 @@ struct Collected {
     version: (u32, u32),
 }
 
-fn collect(sources: Vec<(Document, Vec<u32>)>) -> Result<Collected, MergeError> {
-    let mut collected = Collected {
-        pages: Vec::new(),
-        objects: BTreeMap::new(),
-        skeleton: None,
-        info_id: None,
-        next_id: 1,
-        version: (1, 5),
-    };
+fn collect(sources: Vec<(String, Document, Vec<u32>)>) -> Result<Collected, MergeError> {
+    let mut iter = sources.into_iter();
+    let (first_path, mut first_doc, first_selected) = iter
+        .next()
+        .expect("merge called with no sources; runner enforces at least one input");
 
-    for (mut doc, selected) in sources {
-        collected.version = collected.version.max(parse_version(&doc.version));
-        doc.renumber_objects_with(collected.next_id);
-        collected.next_id = doc.max_id + 1;
-        if collected.skeleton.is_none() {
-            let catalog_id = doc.trailer.get(b"Root").and_then(Object::as_reference)?;
-            let pages_id = doc
-                .get_object(catalog_id)
-                .and_then(Object::as_dict)?
-                .get(b"Pages")
-                .and_then(Object::as_reference)?;
-            collected.skeleton = Some((catalog_id, pages_id));
-        }
-        if collected.info_id.is_none()
-            && let Ok(Object::Reference(id)) = doc.trailer.get(b"Info")
-        {
-            collected.info_id = Some(*id);
-        }
+    let mut next_id: u32 = 1;
+    let mut version = parse_version(&first_doc.version);
+    first_doc.renumber_objects_with(next_id);
+    next_id = first_doc.max_id + 1;
 
-        let pages = doc.get_pages(); // page number -> object id
-        let mut seen = HashSet::new();
-        for page_no in selected {
-            let src_id = *pages
-                .get(&page_no)
-                .ok_or(MergeError::PageMissing(page_no))?;
-            let dict = flatten_inherited(&doc, src_id)?;
-            let id = if seen.insert(src_id) {
-                src_id
-            } else {
-                let fresh = (collected.next_id, 0);
-                collected.next_id += 1;
-                fresh
-            };
-            collected.pages.push((id, dict));
-        }
-        collected.objects.extend(doc.objects);
+    let skeleton = extract_skeleton(&first_doc, &first_path)?;
+    let info_id = first_info_id(&first_doc);
+
+    let mut pages: Vec<(ObjectId, Dictionary)> = Vec::new();
+    let mut objects: BTreeMap<ObjectId, Object> = BTreeMap::new();
+
+    collect_one(
+        &first_path,
+        &first_doc,
+        &first_selected,
+        &mut pages,
+        &mut next_id,
+    )?;
+    objects.extend(first_doc.objects);
+
+    for (path, mut doc, selected) in iter {
+        version = version.max(parse_version(&doc.version));
+        doc.renumber_objects_with(next_id);
+        next_id = doc.max_id + 1;
+        collect_one(&path, &doc, &selected, &mut pages, &mut next_id)?;
+        objects.extend(doc.objects);
     }
-    Ok(collected)
+
+    Ok(Collected {
+        pages,
+        objects,
+        skeleton,
+        info_id,
+        next_id,
+        version,
+    })
+}
+
+fn collect_one(
+    path: &str,
+    doc: &Document,
+    selected: &[u32],
+    pages: &mut Vec<(ObjectId, Dictionary)>,
+    next_id: &mut u32,
+) -> Result<(), MergeError> {
+    let doc_pages = doc.get_pages();
+    let mut seen = HashSet::new();
+    for &page_no in selected {
+        let src_id = *doc_pages
+            .get(&page_no)
+            .ok_or_else(|| MergeError::PageMissing {
+                path: path.to_string(),
+                page: page_no,
+            })?;
+        let dict = flatten_inherited(doc, src_id).map_err(|source| MergeError::BrokenObject {
+            path: path.to_string(),
+            source,
+        })?;
+        let id = if seen.insert(src_id) {
+            src_id
+        } else {
+            let fresh = (*next_id, 0);
+            *next_id += 1;
+            fresh
+        };
+        pages.push((id, dict));
+    }
+    Ok(())
+}
+
+fn extract_skeleton(doc: &Document, path: &str) -> Result<Skeleton, MergeError> {
+    let no_catalog = || MergeError::NoCatalog {
+        path: path.to_string(),
+    };
+    let catalog_id = doc
+        .trailer
+        .get(b"Root")
+        .and_then(Object::as_reference)
+        .map_err(|_| no_catalog())?;
+    let catalog_dict = doc
+        .get_object(catalog_id)
+        .and_then(Object::as_dict)
+        .map_err(|_| no_catalog())?
+        .clone();
+    let pages_id = catalog_dict
+        .get(b"Pages")
+        .and_then(Object::as_reference)
+        .map_err(|_| no_catalog())?;
+    let pages_node = doc
+        .get_object(pages_id)
+        .and_then(Object::as_dict)
+        .map_err(|_| no_catalog())?
+        .clone();
+    Ok(Skeleton {
+        catalog_id,
+        pages_id,
+        catalog: catalog_dict,
+        pages_node,
+    })
+}
+
+fn first_info_id(doc: &Document) -> Option<ObjectId> {
+    if let Ok(Object::Reference(id)) = doc.trailer.get(b"Info") {
+        Some(*id)
+    } else {
+        None
+    }
 }
 
 /// Parse a PDF header version like `"1.7"` into `(major, minor)`; missing or
@@ -139,21 +214,9 @@ fn parse_version(version: &str) -> (u32, u32) {
     (major, minor)
 }
 
-/// Clone the dictionary stored at `id` (used for the reused catalog / pages node).
-fn clone_dict(
-    objects: &BTreeMap<ObjectId, Object>,
-    id: ObjectId,
-) -> Result<Dictionary, MergeError> {
-    objects
-        .get(&id)
-        .and_then(|o| o.as_dict().ok())
-        .cloned()
-        .ok_or(MergeError::NoCatalog)
-}
-
 /// Copy inheritable attributes from the page-tree ancestors onto the page dict
 /// itself, so pages keep their geometry once detached from their original tree.
-fn flatten_inherited(doc: &Document, page_id: ObjectId) -> Result<Dictionary, MergeError> {
+fn flatten_inherited(doc: &Document, page_id: ObjectId) -> Result<Dictionary, lopdf::Error> {
     let mut dict = doc.get_object(page_id)?.as_dict()?.clone();
 
     let mut cursor = dict.clone();
