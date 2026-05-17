@@ -356,3 +356,9 @@ fn verbose_rejects_inline_value() {
         Err(UnexpectedValue("--verbose".into()))
     );
 }
+
+#[test]
+fn bad_page_spec_empty_renders_naturally() {
+    let err = parse_args(&["a.pdf", "-p", ",", "-o", "w.pdf"]).unwrap_err();
+    assert_eq!(err.to_string(), "--pages `,` has no page numbers");
+}

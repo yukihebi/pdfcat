@@ -1,7 +1,5 @@
 //! Command-line parsing.
 
-use thiserror::Error;
-
 use crate::pages::{PageSpecError, Range, parse_ranges};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -9,28 +7,48 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const HELP: &str = include_str!("help.txt");
 
 /// A malformed command line.
-#[derive(Debug, PartialEq, Eq, Error)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CliError {
-    #[error("unknown option: {0}")]
     UnknownOption(String),
-    #[error("{0} expects a value")]
     MissingValue(&'static str),
-    #[error("{0} does not take a value")]
     UnexpectedValue(String),
-    #[error("--output specified more than once")]
     DuplicateOutput,
-    #[error("--pages must follow an input file")]
     PagesWithoutInput,
-    #[error("must specify --output and/or --count-pages/--count-bytes")]
     NoAction,
-    #[error("no input files")]
     NoInputs,
-    #[error("invalid page spec `{spec}`: {source}")]
-    BadPageSpec {
-        spec: String,
-        #[source]
-        source: PageSpecError,
-    },
+    BadPageSpec { spec: String, source: PageSpecError },
+}
+
+impl std::fmt::Display for CliError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliError::UnknownOption(opt) => write!(f, "unknown option: {opt}"),
+            CliError::MissingValue(label) => write!(f, "{label} expects a value"),
+            CliError::UnexpectedValue(opt) => write!(f, "{opt} does not take a value"),
+            CliError::DuplicateOutput => write!(f, "--output specified more than once"),
+            CliError::PagesWithoutInput => write!(f, "--pages must follow an input file"),
+            CliError::NoAction => {
+                write!(
+                    f,
+                    "must specify --output and/or --count-pages/--count-bytes"
+                )
+            }
+            CliError::NoInputs => write!(f, "no input files"),
+            CliError::BadPageSpec { spec, source } => match source {
+                PageSpecError::Empty => write!(f, "--pages `{spec}` has no page numbers"),
+                _ => write!(f, "invalid page spec `{spec}`: {source}"),
+            },
+        }
+    }
+}
+
+impl std::error::Error for CliError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CliError::BadPageSpec { source, .. } => Some(source),
+            _ => None,
+        }
+    }
 }
 
 /// One input file together with its (optional) page selection.
