@@ -3,6 +3,8 @@ mod merge;
 mod pages;
 mod runner;
 
+use std::env;
+use std::io;
 use std::process::ExitCode;
 
 use thiserror::Error;
@@ -12,7 +14,7 @@ use pages::PageSpecError;
 use runner::OutputOpts;
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
         eprint!("{}", cli::HELP);
         return ExitCode::FAILURE;
@@ -34,10 +36,7 @@ enum Error {
     #[error(transparent)]
     Merge(#[from] merge::MergeError),
     #[error("{path}: cannot open: {source}")]
-    OpenInput {
-        path: String,
-        source: std::io::Error,
-    },
+    OpenInput { path: String, source: io::Error },
     #[error("{path}: invalid PDF: {source}")]
     ParseInput { path: String, source: lopdf::Error },
     #[error("{path}: this PDF has no pages")]
@@ -45,14 +44,11 @@ enum Error {
     #[error("{path}: {source}")]
     PageSelection { path: String, source: PageSpecError },
     #[error("cannot write {path}: {source}")]
-    WriteOutput {
-        path: String,
-        source: std::io::Error,
-    },
+    WriteOutput { path: String, source: io::Error },
     #[error("failed to serialize merged PDF: {0}")]
-    SerializeForCount(std::io::Error),
+    SerializeForCount(io::Error),
     #[error("failed to write report output: {0}")]
-    ReportIo(std::io::Error),
+    ReportIo(io::Error),
 }
 
 fn run(args: &[String]) -> Result<(), Error> {

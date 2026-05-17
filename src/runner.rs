@@ -122,7 +122,7 @@ impl<W: Write> Write for CountingWriter<W> {
 fn write_count(
     report: &mut impl Write,
     label: &str,
-    n: impl std::fmt::Display,
+    n: impl fmt::Display,
     quiet: bool,
 ) -> Result<(), Error> {
     if quiet {
