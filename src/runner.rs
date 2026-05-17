@@ -122,7 +122,7 @@ impl<W: Write> Write for CountingWriter<W> {
 fn write_count(
     report: &mut impl Write,
     label: &str,
-    n: impl std::fmt::Display,
+    n: impl fmt::Display,
     quiet: bool,
 ) -> Result<(), Error> {
     if quiet {
@@ -213,12 +213,7 @@ fn count_bytes_to_sink<R: Write>(
     report: &mut R,
 ) -> Result<(), Error> {
     let mut w = CountingWriter::new(io::sink());
-    merged
-        .save_to(&mut w)
-        .map_err(|source| Error::WriteOutput {
-            path: "<none>".to_string(),
-            source,
-        })?;
+    merged.save_to(&mut w).map_err(Error::SerializeForCount)?;
     write_count(report, "bytes", w.count(), opts.quiet)
 }
 
@@ -229,7 +224,7 @@ fn count_bytes_to_sink<R: Write>(
 fn load_sources<W: Write>(
     inputs: &[Input],
     vlog: &mut VerboseLog<W>,
-) -> Result<Vec<(Document, Vec<u32>)>, Error> {
+) -> Result<Vec<(String, Document, Vec<u32>)>, Error> {
     let total = inputs.len();
     let indent = " ".repeat(fmt_header_index(1, total).len() + 1);
     let mut sources = Vec::with_capacity(total);
@@ -247,11 +242,17 @@ fn load_one_source<W: Write>(
     total: usize,
     indent: &str,
     vlog: &mut VerboseLog<W>,
-) -> Result<(Document, Vec<u32>), Error> {
+) -> Result<(String, Document, Vec<u32>), Error> {
     vlog.log_input_header(idx, total, input)?;
-    let doc = Document::load(&input.path).map_err(|source| Error::ReadInput {
-        path: input.path.clone(),
-        source,
+    let doc = Document::load(&input.path).map_err(|source| match source {
+        lopdf::Error::IO(io) => Error::OpenInput {
+            path: input.path.clone(),
+            source: io,
+        },
+        other => Error::ParseInput {
+            path: input.path.clone(),
+            source: other,
+        },
     })?;
     let total_pages = doc.get_pages().len() as u32;
     if total_pages == 0 {
@@ -270,7 +271,7 @@ fn load_one_source<W: Write>(
     };
     let count = input.ranges.as_ref().map(|_| selected.len());
     vlog.log_input_detail(indent, total_pages, count)?;
-    Ok((doc, selected))
+    Ok((input.path.clone(), doc, selected))
 }
 
 /// Format `[i/total]` with `i` right-justified to the width of `total`.

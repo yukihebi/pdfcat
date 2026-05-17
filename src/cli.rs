@@ -1,8 +1,7 @@
 //! Command-line parsing.
 
-use thiserror::Error;
-
 use crate::pages::{PageSpecError, Range, parse_ranges};
+use thiserror::Error;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -16,14 +15,14 @@ pub enum CliError {
     #[error("{0} expects a value")]
     MissingValue(&'static str),
     #[error("{0} does not take a value")]
-    UnexpectedValue(&'static str),
+    UnexpectedValue(String),
     #[error("--output specified more than once")]
     DuplicateOutput,
     #[error("--pages must follow an input file")]
     PagesWithoutInput,
     #[error("must specify --output and/or --count-pages/--count-bytes")]
     NoAction,
-    #[error("no input files")]
+    #[error("no input files (need at least one PDF)")]
     NoInputs,
     #[error("invalid page spec `{spec}`: {source}")]
     BadPageSpec {
@@ -31,6 +30,8 @@ pub enum CliError {
         #[source]
         source: PageSpecError,
     },
+    #[error("--pages `{spec}` has no page numbers")]
+    EmptyPageSpec { spec: String },
 }
 
 /// One input file together with its (optional) page selection.
@@ -128,20 +129,20 @@ impl<'a> Parser<'a> {
             // No-value flags: any `=value` is rejected.
             "--count-pages" | "--count-page" | "--page-count" | "--page-counts" | "--num-pages"
             | "--num-page" | "--npages" | "--npage" => {
-                Self::reject_value("--count-pages", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.count_pages = true;
             }
             "--count-bytes" | "--count-byte" | "--byte-count" | "--byte-counts" | "--num-bytes"
             | "--num-byte" | "--nbytes" | "--nbyte" => {
-                Self::reject_value("--count-bytes", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.count_bytes = true;
             }
             "-q" | "--quiet" => {
-                Self::reject_value("--quiet", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.quiet = true;
             }
             "-v" | "--verbose" => {
-                Self::reject_value("--verbose", inline)?;
+                Self::reject_value(opt, inline)?;
                 self.verbose = true;
             }
             _ if opt.starts_with('-') && opt != "-" => {
@@ -182,9 +183,9 @@ impl<'a> Parser<'a> {
         Ok(value)
     }
 
-    fn reject_value(label: &'static str, inline: Option<&str>) -> Result<(), CliError> {
+    fn reject_value(label: &str, inline: Option<&str>) -> Result<(), CliError> {
         if inline.is_some() {
-            Err(CliError::UnexpectedValue(label))
+            Err(CliError::UnexpectedValue(label.to_string()))
         } else {
             Ok(())
         }
@@ -209,6 +210,9 @@ impl<'a> Parser<'a> {
             spec: spec.clone(),
             source,
         })?;
+        if ranges.is_empty() {
+            return Err(CliError::EmptyPageSpec { spec });
+        }
         last.ranges.get_or_insert_with(Vec::new).extend(ranges);
         Ok(())
     }

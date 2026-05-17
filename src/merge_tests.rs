@@ -83,8 +83,12 @@ fn page_ids(doc: &Document) -> Vec<ObjectId> {
 #[test]
 fn concatenates_pages_in_order() {
     let merged = merge(vec![
-        (doc_with_widths(&[10, 20, 30]), vec![1, 2, 3]),
-        (doc_with_widths(&[40, 50]), vec![1, 2]),
+        (
+            "a.pdf".to_string(),
+            doc_with_widths(&[10, 20, 30]),
+            vec![1, 2, 3],
+        ),
+        ("b.pdf".to_string(), doc_with_widths(&[40, 50]), vec![1, 2]),
     ])
     .unwrap();
     assert_eq!(page_widths(&merged), [10, 20, 30, 40, 50]);
@@ -99,6 +103,7 @@ fn concatenates_pages_in_order() {
 #[test]
 fn selects_and_reorders_pages() {
     let merged = merge(vec![(
+        "src.pdf".to_string(),
         doc_with_widths(&[10, 20, 30, 40, 50]),
         vec![5, 1, 3],
     )])
@@ -108,7 +113,12 @@ fn selects_and_reorders_pages() {
 
 #[test]
 fn duplicate_page_gets_a_fresh_id() {
-    let merged = merge(vec![(doc_with_widths(&[10, 20]), vec![1, 1, 2])]).unwrap();
+    let merged = merge(vec![(
+        "src.pdf".to_string(),
+        doc_with_widths(&[10, 20]),
+        vec![1, 1, 2],
+    )])
+    .unwrap();
     assert_eq!(page_widths(&merged), [10, 10, 20]);
     let ids = page_ids(&merged);
     let unique: HashSet<_> = ids.iter().collect();
@@ -120,8 +130,8 @@ fn duplicate_then_more_inputs_keeps_ids_disjoint() {
     // A duplicated page in the first input must not steal an id that the
     // second input's objects will be renumbered onto.
     let merged = merge(vec![
-        (doc_with_widths(&[10, 20]), vec![1, 1]),
-        (doc_with_widths(&[30, 40]), vec![2, 1]),
+        ("a.pdf".to_string(), doc_with_widths(&[10, 20]), vec![1, 1]),
+        ("b.pdf".to_string(), doc_with_widths(&[30, 40]), vec![2, 1]),
     ])
     .unwrap();
     assert_eq!(page_widths(&merged), [10, 10, 40, 30]);
@@ -150,7 +160,7 @@ fn keeps_supporting_objects_but_drops_outlines() {
         catalog.set("Outlines", outlines_id);
     }
 
-    let merged = merge(vec![(doc, vec![1])]).unwrap();
+    let merged = merge(vec![("src.pdf".to_string(), doc, vec![1])]).unwrap();
     let page_id = *merged.get_pages().values().next().unwrap();
     let page = merged.get_object(page_id).unwrap().as_dict().unwrap();
     let contents_ref = page.get(b"Contents").unwrap().as_reference().unwrap();
@@ -166,7 +176,12 @@ fn keeps_supporting_objects_but_drops_outlines() {
 
 #[test]
 fn inherited_media_box_is_flattened_onto_pages() {
-    let merged = merge(vec![(doc_with_inherited_box(2, 70), vec![1, 2])]).unwrap();
+    let merged = merge(vec![(
+        "src.pdf".to_string(),
+        doc_with_inherited_box(2, 70),
+        vec![1, 2],
+    )])
+    .unwrap();
     for &id in merged.get_pages().values() {
         let dict = merged.get_object(id).unwrap().as_dict().unwrap();
         let mb = dict.get(b"MediaBox").unwrap().as_array().unwrap();
@@ -181,9 +196,9 @@ fn inherited_media_box_is_flattened_onto_pages() {
 }
 
 #[test]
-fn empty_selection_is_an_error() {
-    assert!(merge(vec![]).is_err());
-    assert!(merge(vec![(doc_with_widths(&[10, 20]), vec![])]).is_err());
+#[should_panic(expected = "merge called with no sources")]
+fn merge_with_no_sources_panics() {
+    let _: Result<_, _> = merge(vec![]);
 }
 
 #[test]
@@ -194,11 +209,38 @@ fn info_dictionary_is_carried_over() {
     let info_id = doc.add_object(info);
     doc.trailer.set("Info", info_id);
 
-    let merged = merge(vec![(doc, vec![1])]).unwrap();
+    let merged = merge(vec![("src.pdf".to_string(), doc, vec![1])]).unwrap();
     let info_ref = merged.trailer.get(b"Info").unwrap().as_reference().unwrap();
     let info = merged.get_object(info_ref).unwrap().as_dict().unwrap();
     assert_eq!(
         info.get(b"Producer").unwrap().as_str().unwrap(),
         b"pdfcat-test"
     );
+}
+
+#[test]
+fn no_catalog_error_carries_first_input_path() {
+    // A document missing /Root in the trailer trips skeleton extraction.
+    let doc = Document::with_version("1.5");
+    // No Root set on trailer.
+    let err = merge(vec![("missing-root.pdf".to_string(), doc, vec![])]).unwrap_err();
+    match err {
+        MergeError::NoCatalog { path } => assert_eq!(path, "missing-root.pdf"),
+        other => panic!("expected NoCatalog, got {other:?}"),
+    }
+}
+
+#[test]
+fn empty_selection_yields_zero_page_document() {
+    // With NoPages removed, asking for zero pages from a real document
+    // now produces a valid 0-page merged document. This path is unreachable
+    // from the CLI (parse_ranges rejects empty specs, and load_one_source
+    // rejects 0-page inputs), but the in-module contract is pinned here.
+    let merged = merge(vec![(
+        "src.pdf".to_string(),
+        doc_with_widths(&[10, 20]),
+        vec![],
+    )])
+    .unwrap();
+    assert_eq!(merged.get_pages().len(), 0);
 }
