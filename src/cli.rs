@@ -14,6 +14,13 @@ pub const HELP: &str = concat!(
 #[allow(dead_code)]
 pub const QUICKSTART: &str = include_str!("quickstart.txt");
 
+/// Format a CLI parse error with the Quickstart block and a pointer
+/// to `--help`, ready to write to stderr.
+#[allow(dead_code)]
+pub fn cli_error_message(err: &CliError) -> String {
+    format!("pdfcat: {err}\n\n{QUICKSTART}\nRun 'pdfcat --help' for details.\n")
+}
+
 /// A malformed command line.
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum CliError {

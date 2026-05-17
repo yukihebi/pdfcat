@@ -402,3 +402,19 @@ fn help_uses_npages_nbytes_as_primary() {
     assert!(HELP.contains("--count-pages"));
     assert!(HELP.contains("--count-bytes"));
 }
+
+#[test]
+fn cli_error_message_appends_quickstart_and_help_hint() {
+    let err = CliError::UnknownOption("--foo".to_string());
+    let msg = cli_error_message(&err);
+    assert!(
+        msg.starts_with("pdfcat: unknown option: --foo\n"),
+        "unexpected prefix: {msg:?}"
+    );
+    assert!(msg.contains("\n\nQuickstart:\n"));
+    assert!(msg.contains("pdfcat x.pdf y.pdf z.pdf -o out.pdf"));
+    assert!(
+        msg.ends_with("\nRun 'pdfcat --help' for details.\n"),
+        "unexpected suffix: {msg:?}"
+    );
+}
