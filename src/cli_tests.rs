@@ -362,3 +362,13 @@ fn bad_page_spec_empty_renders_naturally() {
     let err = parse_args(&["a.pdf", "-p", ",", "-o", "w.pdf"]).unwrap_err();
     assert_eq!(err.to_string(), "--pages `,` has no page numbers");
 }
+
+#[test]
+fn quickstart_block_has_canonical_shape() {
+    let q = QUICKSTART;
+    assert!(q.starts_with("Quickstart:\n"), "got: {q:?}");
+    assert!(q.contains("pdfcat x.pdf y.pdf z.pdf -o out.pdf"));
+    assert!(q.contains("pdfcat x.pdf -p -3,5,7- -o out.pdf"));
+    assert!(q.contains("pdfcat x.pdf --npages"));
+    assert!(q.ends_with('\n'));
+}
