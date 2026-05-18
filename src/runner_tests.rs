@@ -8,6 +8,7 @@ use std::path::Path;
 // Bring VerboseLog into scope for all tests in this file.
 use super::VerboseLog;
 
+#[allow(dead_code)]
 fn tiny_doc(n: usize) -> Document {
     let mut doc = Document::with_version("1.5");
     let pages_id = doc.add_object(Dictionary::new());
@@ -264,6 +265,7 @@ fn fmt_header_index_pads_for_three_digit_total() {
     assert_eq!(fmt_header_index(100, 100), "[100/100]");
 }
 
+#[allow(dead_code)]
 fn write_tiny_pdf(n: usize) -> tempfile::NamedTempFile {
     let mut doc = tiny_doc(n);
     let tmp = tempfile::Builder::new()
@@ -277,8 +279,7 @@ fn write_tiny_pdf(n: usize) -> tempfile::NamedTempFile {
 
 #[test]
 fn load_sources_verbose_logs_header_and_detail_with_pages() {
-    let pdf = write_tiny_pdf(5);
-    let path = pdf.path().to_str().unwrap();
+    let path = "tests/fixtures/3pages.pdf";
     let inputs = vec![crate::cli::Input {
         path: path.to_string(),
         ranges: Some(crate::pages::parse_ranges("1,3").unwrap()),
@@ -287,14 +288,13 @@ fn load_sources_verbose_logs_header_and_detail_with_pages() {
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
-    let expected = format!("[1/1] {path} -p 1,3\n      5 pages total, 2 selected\n");
+    let expected = format!("[1/1] {path} -p 1,3\n      3 pages total, 2 selected\n");
     assert_eq!(s, expected);
 }
 
 #[test]
 fn load_sources_verbose_uses_all_when_ranges_absent() {
-    let pdf = write_tiny_pdf(3);
-    let path = pdf.path().to_str().unwrap();
+    let path = "tests/fixtures/3pages.pdf";
     let inputs = vec![crate::cli::Input {
         path: path.to_string(),
         ranges: None,
@@ -309,11 +309,10 @@ fn load_sources_verbose_uses_all_when_ranges_absent() {
 
 #[test]
 fn load_sources_verbose_pads_header_index() {
-    let pdf = write_tiny_pdf(2);
-    let p = pdf.path().to_str().unwrap().to_string();
+    let path = "tests/fixtures/1page.pdf";
     let inputs: Vec<crate::cli::Input> = (0..10)
         .map(|_| crate::cli::Input {
-            path: p.clone(),
+            path: path.to_string(),
             ranges: None,
         })
         .collect();
@@ -321,15 +320,14 @@ fn load_sources_verbose_pads_header_index() {
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
-    assert!(s.contains(&format!("[ 1/10] {p}\n")), "got: {s}");
-    assert!(s.contains(&format!("[10/10] {p}\n")), "got: {s}");
+    assert!(s.contains(&format!("[ 1/10] {path}\n")), "got: {s}");
+    assert!(s.contains(&format!("[10/10] {path}\n")), "got: {s}");
 }
 
 #[test]
 fn load_sources_silent_when_verbose_false() {
-    let pdf = write_tiny_pdf(2);
     let inputs = vec![crate::cli::Input {
-        path: pdf.path().to_str().unwrap().to_string(),
+        path: "tests/fixtures/1page.pdf".to_string(),
         ranges: None,
     }];
     let mut log = Vec::new();
