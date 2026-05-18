@@ -1,79 +1,26 @@
 use super::*;
 
-/// Build an `n`-page document whose pages carry a distinct `/MediaBox`
-/// width — a stand-in for page identity that survives the merge.
-fn doc_with_widths(widths: &[i64]) -> Document {
-    let mut doc = Document::with_version("1.5");
-    let pages_id = doc.add_object(Dictionary::new());
-    let kids: Vec<Object> = widths
-        .iter()
-        .map(|&w| {
-            let mut page = Dictionary::new();
-            page.set("Type", "Page");
-            page.set("Parent", pages_id);
-            page.set("MediaBox", media_box(w));
-            Object::Reference(doc.add_object(page))
-        })
-        .collect();
-    let mut pages = Dictionary::new();
-    pages.set("Type", "Pages");
-    pages.set("Count", widths.len() as i64);
-    pages.set("Kids", kids);
-    doc.objects.insert(pages_id, Object::Dictionary(pages));
-    let mut catalog = Dictionary::new();
-    catalog.set("Type", "Catalog");
-    catalog.set("Pages", pages_id);
-    let catalog_id = doc.add_object(catalog);
-    doc.trailer.set("Root", catalog_id);
-    doc
-}
-
-/// Like [`doc_with_widths`] but the `/MediaBox` lives on the `/Pages` node,
-/// so each page inherits it rather than declaring its own.
-fn doc_with_inherited_box(n: usize, width: i64) -> Document {
-    let mut doc = Document::with_version("1.5");
-    let pages_id = doc.add_object(Dictionary::new());
-    let kids: Vec<Object> = (0..n)
-        .map(|_| {
-            let mut page = Dictionary::new();
-            page.set("Type", "Page");
-            page.set("Parent", pages_id);
-            Object::Reference(doc.add_object(page))
-        })
-        .collect();
-    let mut pages = Dictionary::new();
-    pages.set("Type", "Pages");
-    pages.set("Count", n as i64);
-    pages.set("Kids", kids);
-    pages.set("MediaBox", media_box(width));
-    doc.objects.insert(pages_id, Object::Dictionary(pages));
-    let mut catalog = Dictionary::new();
-    catalog.set("Type", "Catalog");
-    catalog.set("Pages", pages_id);
-    let catalog_id = doc.add_object(catalog);
-    doc.trailer.set("Root", catalog_id);
-    doc
-}
-
-fn media_box(width: i64) -> Object {
-    Object::Array(vec![
-        Object::Integer(0),
-        Object::Integer(0),
-        Object::Integer(width),
-        Object::Integer(100),
-    ])
-}
-
-/// The `/MediaBox` width of every page, in page order.
-fn page_widths(doc: &Document) -> Vec<i64> {
+/// The decompressed `/Contents` stream bytes of every page, in page
+/// order. Used as a page-identity fingerprint that survives `merge`
+/// (which carries content streams byte-for-byte).
+fn page_content_bytes(doc: &Document) -> Vec<Vec<u8>> {
     doc.get_pages()
         .values()
-        .map(|&id| {
-            let dict = doc.get_object(id).unwrap().as_dict().unwrap();
-            let mb = dict.get(b"MediaBox").unwrap().as_array().unwrap();
-            mb[2].as_i64().unwrap()
-        })
+        .map(|&id| page_contents_one(doc, id))
         .collect()
+}
+
+fn page_contents_one(doc: &Document, page_id: ObjectId) -> Vec<u8> {
+    let page = doc.get_object(page_id).unwrap().as_dict().unwrap();
+    let contents_id = page.get(b"Contents").unwrap().as_reference().unwrap();
+    let mut stream = doc
+        .get_object(contents_id)
+        .unwrap()
+        .as_stream()
+        .unwrap()
+        .clone();
+    let _ = stream.decompress();
+    stream.content
 }
 
 fn page_ids(doc: &Document) -> Vec<ObjectId> {
@@ -82,44 +29,65 @@ fn page_ids(doc: &Document) -> Vec<ObjectId> {
 
 #[test]
 fn concatenates_pages_in_order() {
+    let one = Document::load("tests/fixtures/1page.pdf").unwrap();
+    let three = Document::load("tests/fixtures/3pages.pdf").unwrap();
+    let expected = [
+        page_contents_one(&one, one.get_pages()[&1]),
+        page_contents_one(&three, three.get_pages()[&1]),
+        page_contents_one(&three, three.get_pages()[&2]),
+        page_contents_one(&three, three.get_pages()[&3]),
+    ];
+
     let merged = merge(vec![
         (
-            "a.pdf".to_string(),
-            doc_with_widths(&[10, 20, 30]),
+            "1page.pdf".to_string(),
+            Document::load("tests/fixtures/1page.pdf").unwrap(),
+            vec![1],
+        ),
+        (
+            "3pages.pdf".to_string(),
+            Document::load("tests/fixtures/3pages.pdf").unwrap(),
             vec![1, 2, 3],
         ),
-        ("b.pdf".to_string(), doc_with_widths(&[40, 50]), vec![1, 2]),
     ])
     .unwrap();
-    assert_eq!(page_widths(&merged), [10, 20, 30, 40, 50]);
-    // The trailer points at a real Catalog whose /Pages has Count == 5.
+    assert_eq!(page_content_bytes(&merged), expected);
     let root = merged.trailer.get(b"Root").unwrap().as_reference().unwrap();
     let catalog = merged.get_object(root).unwrap().as_dict().unwrap();
     let pages_id = catalog.get(b"Pages").unwrap().as_reference().unwrap();
     let pages = merged.get_object(pages_id).unwrap().as_dict().unwrap();
-    assert_eq!(pages.get(b"Count").unwrap().as_i64().unwrap(), 5);
+    assert_eq!(pages.get(b"Count").unwrap().as_i64().unwrap(), 4);
 }
 
 #[test]
 fn selects_and_reorders_pages() {
+    let src = Document::load("tests/fixtures/3pages.pdf").unwrap();
+    let expected = [
+        page_contents_one(&src, src.get_pages()[&3]),
+        page_contents_one(&src, src.get_pages()[&1]),
+        page_contents_one(&src, src.get_pages()[&2]),
+    ];
     let merged = merge(vec![(
         "src.pdf".to_string(),
-        doc_with_widths(&[10, 20, 30, 40, 50]),
-        vec![5, 1, 3],
+        Document::load("tests/fixtures/3pages.pdf").unwrap(),
+        vec![3, 1, 2],
     )])
     .unwrap();
-    assert_eq!(page_widths(&merged), [50, 10, 30]);
+    assert_eq!(page_content_bytes(&merged), expected);
 }
 
 #[test]
 fn duplicate_page_gets_a_fresh_id() {
+    let src = Document::load("tests/fixtures/3pages.pdf").unwrap();
+    let p1 = page_contents_one(&src, src.get_pages()[&1]);
+    let p2 = page_contents_one(&src, src.get_pages()[&2]);
     let merged = merge(vec![(
         "src.pdf".to_string(),
-        doc_with_widths(&[10, 20]),
+        Document::load("tests/fixtures/3pages.pdf").unwrap(),
         vec![1, 1, 2],
     )])
     .unwrap();
-    assert_eq!(page_widths(&merged), [10, 10, 20]);
+    assert_eq!(page_content_bytes(&merged), [p1.clone(), p1, p2]);
     let ids = page_ids(&merged);
     let unique: HashSet<_> = ids.iter().collect();
     assert_eq!(unique.len(), 3, "every page must be a distinct object");
@@ -129,45 +97,52 @@ fn duplicate_page_gets_a_fresh_id() {
 fn duplicate_then_more_inputs_keeps_ids_disjoint() {
     // A duplicated page in the first input must not steal an id that the
     // second input's objects will be renumbered onto.
+    let three = Document::load("tests/fixtures/3pages.pdf").unwrap();
+    let one = Document::load("tests/fixtures/1page.pdf").unwrap();
+    let p1 = page_contents_one(&three, three.get_pages()[&1]);
+    let p_one = page_contents_one(&one, one.get_pages()[&1]);
     let merged = merge(vec![
-        ("a.pdf".to_string(), doc_with_widths(&[10, 20]), vec![1, 1]),
-        ("b.pdf".to_string(), doc_with_widths(&[30, 40]), vec![2, 1]),
+        (
+            "a.pdf".to_string(),
+            Document::load("tests/fixtures/3pages.pdf").unwrap(),
+            vec![1, 1],
+        ),
+        (
+            "b.pdf".to_string(),
+            Document::load("tests/fixtures/1page.pdf").unwrap(),
+            vec![1, 1],
+        ),
     ])
     .unwrap();
-    assert_eq!(page_widths(&merged), [10, 10, 40, 30]);
+    assert_eq!(
+        page_content_bytes(&merged),
+        [p1.clone(), p1, p_one.clone(), p_one]
+    );
     let unique: HashSet<_> = page_ids(&merged).into_iter().collect();
     assert_eq!(unique.len(), 4);
 }
 
 #[test]
 fn keeps_supporting_objects_but_drops_outlines() {
-    let mut doc = doc_with_widths(&[10]);
-    // Attach a content stream to the page (a supporting object that must
-    // survive) and an /Outlines entry to the catalog (which must not).
-    let contents_id = doc.add_object(lopdf::Stream::new(Dictionary::new(), b"BT ET".to_vec()));
-    let outlines_id = doc.add_object({
-        let mut d = Dictionary::new();
-        d.set("Type", "Outlines");
-        d.set("Count", 0);
-        d
-    });
-    let page_id = *doc.get_pages().values().next().unwrap();
-    if let Ok(page) = doc.get_object_mut(page_id).and_then(Object::as_dict_mut) {
-        page.set("Contents", contents_id);
-    }
-    let root = doc.trailer.get(b"Root").unwrap().as_reference().unwrap();
-    if let Ok(catalog) = doc.get_object_mut(root).and_then(Object::as_dict_mut) {
-        catalog.set("Outlines", outlines_id);
-    }
+    // with-outline.pdf has /Outlines (from hyperref's \section) and real
+    // page content streams. After merging, content streams must survive
+    // and /Outlines must not.
+    let merged = merge(vec![(
+        "with-outline.pdf".to_string(),
+        Document::load("tests/fixtures/with-outline.pdf").unwrap(),
+        vec![1, 2],
+    )])
+    .unwrap();
 
-    let merged = merge(vec![("src.pdf".to_string(), doc, vec![1])]).unwrap();
-    let page_id = *merged.get_pages().values().next().unwrap();
-    let page = merged.get_object(page_id).unwrap().as_dict().unwrap();
-    let contents_ref = page.get(b"Contents").unwrap().as_reference().unwrap();
-    assert!(
-        merged.get_object(contents_ref).is_ok(),
-        "content stream kept"
-    );
+    // Every merged page still has a usable /Contents reference.
+    for &id in merged.get_pages().values() {
+        let page = merged.get_object(id).unwrap().as_dict().unwrap();
+        let contents_ref = page.get(b"Contents").unwrap().as_reference().unwrap();
+        assert!(
+            merged.get_object(contents_ref).is_ok(),
+            "content stream kept"
+        );
+    }
 
     let root = merged.trailer.get(b"Root").unwrap().as_reference().unwrap();
     let catalog = merged.get_object(root).unwrap().as_dict().unwrap();
@@ -175,24 +150,34 @@ fn keeps_supporting_objects_but_drops_outlines() {
 }
 
 #[test]
-fn inherited_media_box_is_flattened_onto_pages() {
+fn inheritable_attrs_flattened_and_stale_keys_stripped() {
+    // inherited-resources.pdf carries /Resources on its /Pages node;
+    // leaves do not have /Resources. After merge, (a) each leaf must
+    // carry the flattened /Resources, and (b) the rebuilt /Pages node
+    // must no longer carry /Resources (STALE_PAGES_KEYS strip).
     let merged = merge(vec![(
-        "src.pdf".to_string(),
-        doc_with_inherited_box(2, 70),
+        "inherited-resources.pdf".to_string(),
+        Document::load("tests/fixtures/inherited-resources.pdf").unwrap(),
         vec![1, 2],
     )])
     .unwrap();
+
     for &id in merged.get_pages().values() {
-        let dict = merged.get_object(id).unwrap().as_dict().unwrap();
-        let mb = dict.get(b"MediaBox").unwrap().as_array().unwrap();
-        assert_eq!(mb[2].as_i64().unwrap(), 70);
+        let page = merged.get_object(id).unwrap().as_dict().unwrap();
+        assert!(
+            page.get(b"Resources").is_ok(),
+            "leaf must have /Resources after flattening"
+        );
     }
-    // ...and the rebuilt /Pages node no longer carries the inherited box.
+
     let root = merged.trailer.get(b"Root").unwrap().as_reference().unwrap();
     let catalog = merged.get_object(root).unwrap().as_dict().unwrap();
     let pages_id = catalog.get(b"Pages").unwrap().as_reference().unwrap();
     let pages = merged.get_object(pages_id).unwrap().as_dict().unwrap();
-    assert!(pages.get(b"MediaBox").is_err());
+    assert!(
+        pages.get(b"Resources").is_err(),
+        "/Pages node must not retain stale /Resources"
+    );
 }
 
 #[test]
@@ -203,19 +188,18 @@ fn merge_with_no_sources_panics() {
 
 #[test]
 fn info_dictionary_is_carried_over() {
-    let mut doc = doc_with_widths(&[10]);
-    let mut info = Dictionary::new();
-    info.set("Producer", Object::string_literal("pdfcat-test"));
-    let info_id = doc.add_object(info);
-    doc.trailer.set("Info", info_id);
-
-    let merged = merge(vec![("src.pdf".to_string(), doc, vec![1])]).unwrap();
+    // 1page.pdf has /Info (LuaTeX writes /Producer etc.).
+    let merged = merge(vec![(
+        "1page.pdf".to_string(),
+        Document::load("tests/fixtures/1page.pdf").unwrap(),
+        vec![1],
+    )])
+    .unwrap();
     let info_ref = merged.trailer.get(b"Info").unwrap().as_reference().unwrap();
     let info = merged.get_object(info_ref).unwrap().as_dict().unwrap();
-    assert_eq!(
-        info.get(b"Producer").unwrap().as_str().unwrap(),
-        b"pdfcat-test"
-    );
+    // Don't assert the exact producer string (toolchain-dependent);
+    // just that /Producer is present.
+    assert!(info.get(b"Producer").is_ok());
 }
 
 #[test]
@@ -233,14 +217,35 @@ fn no_catalog_error_carries_first_input_path() {
 #[test]
 fn empty_selection_yields_zero_page_document() {
     // With NoPages removed, asking for zero pages from a real document
-    // now produces a valid 0-page merged document. This path is unreachable
-    // from the CLI (parse_ranges rejects empty specs, and load_one_source
-    // rejects 0-page inputs), but the in-module contract is pinned here.
+    // now produces a valid 0-page merged document. This path is
+    // unreachable from the CLI (parse_ranges rejects empty specs, and
+    // load_one_source rejects 0-page inputs), but the in-module
+    // contract is pinned here.
     let merged = merge(vec![(
-        "src.pdf".to_string(),
-        doc_with_widths(&[10, 20]),
+        "3pages.pdf".to_string(),
+        Document::load("tests/fixtures/3pages.pdf").unwrap(),
         vec![],
     )])
     .unwrap();
     assert_eq!(merged.get_pages().len(), 0);
+}
+
+#[test]
+fn picks_highest_pdf_version() {
+    // 3pages.pdf is PDF 1.7 (TeX Live 2026 default); v1.4.pdf is PDF
+    // 1.4 (forced via \pdfvariable minorversion=4). merge should pick 1.7.
+    let merged = merge(vec![
+        (
+            "3pages.pdf".to_string(),
+            Document::load("tests/fixtures/3pages.pdf").unwrap(),
+            vec![1],
+        ),
+        (
+            "v1.4.pdf".to_string(),
+            Document::load("tests/fixtures/v1.4.pdf").unwrap(),
+            vec![1],
+        ),
+    ])
+    .unwrap();
+    assert_eq!(merged.version, "1.7");
 }

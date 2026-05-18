@@ -1,5 +1,5 @@
 use super::*;
-use lopdf::{Dictionary, Document, Object};
+use lopdf::Document;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
@@ -8,42 +8,9 @@ use std::path::Path;
 // Bring VerboseLog into scope for all tests in this file.
 use super::VerboseLog;
 
-fn tiny_doc(n: usize) -> Document {
-    let mut doc = Document::with_version("1.5");
-    let pages_id = doc.add_object(Dictionary::new());
-    let kids: Vec<Object> = (0..n)
-        .map(|_| {
-            let mut page = Dictionary::new();
-            page.set("Type", "Page");
-            page.set("Parent", pages_id);
-            page.set(
-                "MediaBox",
-                Object::Array(vec![
-                    Object::Integer(0),
-                    Object::Integer(0),
-                    Object::Integer(10),
-                    Object::Integer(10),
-                ]),
-            );
-            Object::Reference(doc.add_object(page))
-        })
-        .collect();
-    let mut pages = Dictionary::new();
-    pages.set("Type", "Pages");
-    pages.set("Count", n as i64);
-    pages.set("Kids", kids);
-    doc.objects.insert(pages_id, Object::Dictionary(pages));
-    let mut catalog = Dictionary::new();
-    catalog.set("Type", "Catalog");
-    catalog.set("Pages", pages_id);
-    let catalog_id = doc.add_object(catalog);
-    doc.trailer.set("Root", catalog_id);
-    doc
-}
-
 #[test]
 fn execute_run_count_pages_only_writes_no_file() {
-    let mut doc = tiny_doc(3);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -62,11 +29,11 @@ fn execute_run_count_pages_only_writes_no_file() {
 fn execute_run_count_bytes_only_matches_serialized_size() {
     // Two independent docs because save_to may mutate internal state and
     // re-saving the same doc is not guaranteed to produce the same bytes.
-    let mut doc_ref = tiny_doc(2);
+    let mut doc_ref = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut expected = Vec::new();
     doc_ref.save_to(&mut expected).unwrap();
 
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -87,7 +54,7 @@ fn execute_run_count_bytes_only_matches_serialized_size() {
 
 #[test]
 fn execute_run_both_flags_emit_pages_then_bytes() {
-    let mut doc = tiny_doc(1);
+    let mut doc = Document::load("tests/fixtures/1page.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -106,7 +73,7 @@ fn execute_run_both_flags_emit_pages_then_bytes() {
 
 #[test]
 fn execute_run_writes_file_when_output_given() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -131,7 +98,7 @@ fn execute_run_writes_file_when_output_given() {
 
 #[test]
 fn execute_run_quiet_count_pages_omits_label() {
-    let mut doc = tiny_doc(3);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -148,11 +115,11 @@ fn execute_run_quiet_count_pages_omits_label() {
 
 #[test]
 fn execute_run_quiet_count_bytes_omits_label() {
-    let mut doc_ref = tiny_doc(2);
+    let mut doc_ref = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut expected = Vec::new();
     doc_ref.save_to(&mut expected).unwrap();
 
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -171,7 +138,7 @@ fn execute_run_quiet_count_bytes_omits_label() {
 
 #[test]
 fn execute_run_quiet_both_emits_two_bare_numbers() {
-    let mut doc = tiny_doc(4);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -184,7 +151,7 @@ fn execute_run_quiet_both_emits_two_bare_numbers() {
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     let mut lines = s.lines();
-    assert_eq!(lines.next(), Some("4"));
+    assert_eq!(lines.next(), Some("3"));
     let bytes: u64 = lines.next().unwrap().parse().unwrap();
     assert!(bytes > 0);
     assert_eq!(lines.next(), None);
@@ -193,7 +160,7 @@ fn execute_run_quiet_both_emits_two_bare_numbers() {
 
 #[test]
 fn execute_run_quiet_no_counts_emits_nothing() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -264,21 +231,9 @@ fn fmt_header_index_pads_for_three_digit_total() {
     assert_eq!(fmt_header_index(100, 100), "[100/100]");
 }
 
-fn write_tiny_pdf(n: usize) -> tempfile::NamedTempFile {
-    let mut doc = tiny_doc(n);
-    let tmp = tempfile::Builder::new()
-        .prefix("pdfcat-")
-        .suffix(".pdf")
-        .tempfile()
-        .unwrap();
-    doc.save(tmp.path()).unwrap();
-    tmp
-}
-
 #[test]
 fn load_sources_verbose_logs_header_and_detail_with_pages() {
-    let pdf = write_tiny_pdf(5);
-    let path = pdf.path().to_str().unwrap();
+    let path = "tests/fixtures/3pages.pdf";
     let inputs = vec![crate::cli::Input {
         path: path.to_string(),
         ranges: Some(crate::pages::parse_ranges("1,3").unwrap()),
@@ -287,14 +242,13 @@ fn load_sources_verbose_logs_header_and_detail_with_pages() {
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
-    let expected = format!("[1/1] {path} -p 1,3\n      5 pages total, 2 selected\n");
+    let expected = format!("[1/1] {path} -p 1,3\n      3 pages total, 2 selected\n");
     assert_eq!(s, expected);
 }
 
 #[test]
 fn load_sources_verbose_uses_all_when_ranges_absent() {
-    let pdf = write_tiny_pdf(3);
-    let path = pdf.path().to_str().unwrap();
+    let path = "tests/fixtures/3pages.pdf";
     let inputs = vec![crate::cli::Input {
         path: path.to_string(),
         ranges: None,
@@ -309,11 +263,10 @@ fn load_sources_verbose_uses_all_when_ranges_absent() {
 
 #[test]
 fn load_sources_verbose_pads_header_index() {
-    let pdf = write_tiny_pdf(2);
-    let p = pdf.path().to_str().unwrap().to_string();
+    let path = "tests/fixtures/1page.pdf";
     let inputs: Vec<crate::cli::Input> = (0..10)
         .map(|_| crate::cli::Input {
-            path: p.clone(),
+            path: path.to_string(),
             ranges: None,
         })
         .collect();
@@ -321,15 +274,14 @@ fn load_sources_verbose_pads_header_index() {
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
-    assert!(s.contains(&format!("[ 1/10] {p}\n")), "got: {s}");
-    assert!(s.contains(&format!("[10/10] {p}\n")), "got: {s}");
+    assert!(s.contains(&format!("[ 1/10] {path}\n")), "got: {s}");
+    assert!(s.contains(&format!("[10/10] {path}\n")), "got: {s}");
 }
 
 #[test]
 fn load_sources_silent_when_verbose_false() {
-    let pdf = write_tiny_pdf(2);
     let inputs = vec![crate::cli::Input {
-        path: pdf.path().to_str().unwrap().to_string(),
+        path: "tests/fixtures/1page.pdf".to_string(),
         ranges: None,
     }];
     let mut log = Vec::new();
@@ -340,7 +292,7 @@ fn load_sources_silent_when_verbose_false() {
 
 #[test]
 fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
-    let mut doc = tiny_doc(4);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -360,7 +312,7 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
     assert_eq!(lines.len(), 2, "got: {s}");
-    assert_eq!(lines[0], "merged: 4 pages");
+    assert_eq!(lines[0], "merged: 3 pages");
     let wrote_prefix = format!("wrote {path} (");
     assert!(lines[1].starts_with(&wrote_prefix), "got: {}", lines[1]);
     assert!(lines[1].ends_with(" bytes)"), "got: {}", lines[1]);
@@ -374,7 +326,7 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
 
 #[test]
 fn execute_run_verbose_no_output_skips_wrote_line() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
@@ -387,14 +339,14 @@ fn execute_run_verbose_no_output_skips_wrote_line() {
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
-    assert_eq!(lines, vec!["merged: 2 pages"]);
+    assert_eq!(lines, vec!["merged: 3 pages"]);
     let r = std::str::from_utf8(&report).unwrap();
     assert!(r.starts_with("bytes: "), "got: {r}");
 }
 
 #[test]
 fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
-    let mut doc = tiny_doc(3);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -425,7 +377,7 @@ fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
 
 #[test]
 fn execute_run_quiet_and_verbose_coexist() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -446,12 +398,12 @@ fn execute_run_quiet_and_verbose_coexist() {
     let log_s = std::str::from_utf8(&log).unwrap();
 
     let mut report_lines = report_s.lines();
-    assert_eq!(report_lines.next(), Some("2"));
+    assert_eq!(report_lines.next(), Some("3"));
     let bytes_line = report_lines.next().unwrap();
     assert_eq!(bytes_line.parse::<u64>().unwrap(), on_disk);
     assert_eq!(report_lines.next(), None);
 
-    assert!(log_s.starts_with("merged: 2 pages\n"), "log: {log_s}");
+    assert!(log_s.starts_with("merged: 3 pages\n"), "log: {log_s}");
     assert!(
         log_s.contains(&format!("wrote {path} ({on_disk} bytes)\n")),
         "log: {log_s}"
@@ -580,5 +532,41 @@ fn load_one_source_corrupt_file_returns_parse_input() {
     match err {
         Error::ParseInput { path, .. } => assert_eq!(path, input.path),
         other => panic!("expected ParseInput, got {other:?}"),
+    }
+}
+
+#[test]
+fn load_one_source_no_pages_returns_no_pages() {
+    use crate::Error;
+    let input = crate::cli::Input {
+        path: "tests/fixtures/0page.pdf".to_string(),
+        ranges: None,
+    };
+    let mut log = Vec::new();
+    let mut vlog = VerboseLog::new(false, &mut log);
+    let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
+    match err {
+        Error::NoPages { path } => assert_eq!(path, input.path),
+        other => panic!("expected NoPages, got {other:?}"),
+    }
+}
+
+#[test]
+fn load_one_source_page_selection_out_of_range() {
+    use crate::Error;
+    use crate::pages::PageSpecError;
+    let input = crate::cli::Input {
+        path: "tests/fixtures/3pages.pdf".to_string(),
+        ranges: Some(crate::pages::parse_ranges("10").unwrap()),
+    };
+    let mut log = Vec::new();
+    let mut vlog = VerboseLog::new(false, &mut log);
+    let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
+    match err {
+        Error::PageSelection { path, source } => {
+            assert_eq!(path, input.path);
+            assert_eq!(source, PageSpecError::OutOfRange { page: 10, total: 3 });
+        }
+        other => panic!("expected PageSelection, got {other:?}"),
     }
 }
