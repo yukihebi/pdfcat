@@ -38,9 +38,6 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar
-          - target: x86_64-apple-darwin
-            os: macos-13
-            archive: tar
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             archive: zip
@@ -79,7 +76,7 @@ jobs:
           $hash = (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower()
           [System.IO.File]::WriteAllText("$stage.zip.sha256", "$hash  $stage.zip`n")
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pdfcat-${{ matrix.target }}
           path: |
@@ -96,7 +93,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
 
