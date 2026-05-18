@@ -3,7 +3,7 @@ use lopdf::{Dictionary, Document, Object};
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Bring VerboseLog into scope for all tests in this file.
 use super::VerboseLog;
@@ -107,31 +107,26 @@ fn execute_run_both_flags_emit_pages_then_bytes() {
 #[test]
 fn execute_run_writes_file_when_output_given() {
     let mut doc = tiny_doc(2);
-    let tmp = std::env::temp_dir().join(format!(
-        "pdfcat-execute_run_writes_file-{}.pdf",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_file(&tmp);
-    let path = tmp.to_str().unwrap().to_string();
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
+    let path = target.to_str().unwrap();
 
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
     let opts = OutputOpts {
-        output: Some(path.as_str()),
+        output: Some(path),
         count_pages: false,
         count_bytes: true,
         quiet: false,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
 
-    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+    let on_disk = std::fs::metadata(&target).unwrap().len();
     let s = std::str::from_utf8(&report).unwrap();
     let reported: u64 = s.trim_start_matches("bytes: ").trim().parse().unwrap();
     assert_eq!(on_disk, reported);
     assert!(log.is_empty());
-
-    let _ = std::fs::remove_file(&tmp);
 }
 
 #[test]
@@ -199,16 +194,15 @@ fn execute_run_quiet_both_emits_two_bare_numbers() {
 #[test]
 fn execute_run_quiet_no_counts_emits_nothing() {
     let mut doc = tiny_doc(2);
-    let tmp =
-        std::env::temp_dir().join(format!("pdfcat-quiet-no-counts-{}.pdf", std::process::id()));
-    let _ = std::fs::remove_file(&tmp);
-    let path = tmp.to_str().unwrap().to_string();
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
+    let path = target.to_str().unwrap();
 
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
     let opts = OutputOpts {
-        output: Some(path.as_str()),
+        output: Some(path),
         count_pages: false,
         count_bytes: false,
         quiet: true,
@@ -216,8 +210,6 @@ fn execute_run_quiet_no_counts_emits_nothing() {
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     assert!(report.is_empty());
     assert!(log.is_empty());
-
-    let _ = std::fs::remove_file(&tmp);
 }
 
 #[test]
@@ -272,56 +264,53 @@ fn fmt_header_index_pads_for_three_digit_total() {
     assert_eq!(fmt_header_index(100, 100), "[100/100]");
 }
 
-fn write_tiny_pdf(n: usize, name: &str) -> std::path::PathBuf {
+fn write_tiny_pdf(n: usize) -> tempfile::NamedTempFile {
     let mut doc = tiny_doc(n);
-    let path = std::env::temp_dir().join(format!("pdfcat-{name}-{}.pdf", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    doc.save(&path).unwrap();
-    path
+    let tmp = tempfile::Builder::new()
+        .prefix("pdfcat-")
+        .suffix(".pdf")
+        .tempfile()
+        .unwrap();
+    doc.save(tmp.path()).unwrap();
+    tmp
 }
 
 #[test]
 fn load_sources_verbose_logs_header_and_detail_with_pages() {
-    let path = write_tiny_pdf(5, "load-verbose-pages");
+    let pdf = write_tiny_pdf(5);
+    let path = pdf.path().to_str().unwrap();
     let inputs = vec![crate::cli::Input {
-        path: path.to_str().unwrap().to_string(),
+        path: path.to_string(),
         ranges: Some(crate::pages::parse_ranges("1,3").unwrap()),
     }];
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
-    let expected = format!(
-        "[1/1] {} -p 1,3\n      5 pages total, 2 selected\n",
-        path.to_str().unwrap()
-    );
+    let expected = format!("[1/1] {path} -p 1,3\n      5 pages total, 2 selected\n");
     assert_eq!(s, expected);
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
 fn load_sources_verbose_uses_all_when_ranges_absent() {
-    let path = write_tiny_pdf(3, "load-verbose-all");
+    let pdf = write_tiny_pdf(3);
+    let path = pdf.path().to_str().unwrap();
     let inputs = vec![crate::cli::Input {
-        path: path.to_str().unwrap().to_string(),
+        path: path.to_string(),
         ranges: None,
     }];
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
-    let expected = format!(
-        "[1/1] {}\n      3 pages total, all\n",
-        path.to_str().unwrap()
-    );
+    let expected = format!("[1/1] {path}\n      3 pages total, all\n");
     assert_eq!(s, expected);
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
 fn load_sources_verbose_pads_header_index() {
-    let path = write_tiny_pdf(2, "load-verbose-padded");
-    let p = path.to_str().unwrap().to_string();
+    let pdf = write_tiny_pdf(2);
+    let p = pdf.path().to_str().unwrap().to_string();
     let inputs: Vec<crate::cli::Input> = (0..10)
         .map(|_| crate::cli::Input {
             path: p.clone(),
@@ -334,42 +323,40 @@ fn load_sources_verbose_pads_header_index() {
     let s = std::str::from_utf8(&log).unwrap();
     assert!(s.contains(&format!("[ 1/10] {p}\n")), "got: {s}");
     assert!(s.contains(&format!("[10/10] {p}\n")), "got: {s}");
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
 fn load_sources_silent_when_verbose_false() {
-    let path = write_tiny_pdf(2, "load-silent");
+    let pdf = write_tiny_pdf(2);
     let inputs = vec![crate::cli::Input {
-        path: path.to_str().unwrap().to_string(),
+        path: pdf.path().to_str().unwrap().to_string(),
         ranges: None,
     }];
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
     load_sources(&inputs, &mut vlog).unwrap();
     assert!(log.is_empty());
-    let _ = std::fs::remove_file(&path);
 }
 
 #[test]
 fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
     let mut doc = tiny_doc(4);
-    let tmp = std::env::temp_dir().join(format!("pdfcat-exec-verbose-{}.pdf", std::process::id()));
-    let _ = std::fs::remove_file(&tmp);
-    let path = tmp.to_str().unwrap().to_string();
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
+    let path = target.to_str().unwrap();
 
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     let opts = OutputOpts {
-        output: Some(path.as_str()),
+        output: Some(path),
         count_pages: false,
         count_bytes: false,
         quiet: false,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
 
-    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+    let on_disk = std::fs::metadata(&target).unwrap().len();
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
     assert_eq!(lines.len(), 2, "got: {s}");
@@ -383,8 +370,6 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
     let reported: u64 = inside.parse().unwrap();
     assert_eq!(reported, on_disk);
     assert!(report.is_empty(), "report should be empty: {report:?}");
-
-    let _ = std::fs::remove_file(&tmp);
 }
 
 #[test]
@@ -410,16 +395,15 @@ fn execute_run_verbose_no_output_skips_wrote_line() {
 #[test]
 fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
     let mut doc = tiny_doc(3);
-    let tmp =
-        std::env::temp_dir().join(format!("pdfcat-exec-verbose-cb-{}.pdf", std::process::id()));
-    let _ = std::fs::remove_file(&tmp);
-    let path = tmp.to_str().unwrap().to_string();
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
+    let path = target.to_str().unwrap();
 
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
     let opts = OutputOpts {
-        output: Some(path.as_str()),
+        output: Some(path),
         count_pages: false,
         count_bytes: true,
         quiet: false,
@@ -428,7 +412,7 @@ fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
 
     let log_s = std::str::from_utf8(&log).unwrap();
     let report_s = std::str::from_utf8(&report).unwrap();
-    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+    let on_disk = std::fs::metadata(&target).unwrap().len();
 
     assert!(log_s.starts_with("merged: 3 pages\n"), "log: {log_s}");
     assert!(
@@ -437,29 +421,27 @@ fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
     );
 
     assert_eq!(report_s, format!("bytes: {on_disk}\n"));
-
-    let _ = std::fs::remove_file(&tmp);
 }
 
 #[test]
 fn execute_run_quiet_and_verbose_coexist() {
     let mut doc = tiny_doc(2);
-    let tmp = std::env::temp_dir().join(format!("pdfcat-exec-qv-{}.pdf", std::process::id()));
-    let _ = std::fs::remove_file(&tmp);
-    let path = tmp.to_str().unwrap().to_string();
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
+    let path = target.to_str().unwrap();
 
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log); // verbose
     let opts = OutputOpts {
-        output: Some(path.as_str()),
+        output: Some(path),
         count_pages: true,
         count_bytes: true,
         quiet: true,
     };
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
 
-    let on_disk = std::fs::metadata(&tmp).unwrap().len();
+    let on_disk = std::fs::metadata(&target).unwrap().len();
     let report_s = std::str::from_utf8(&report).unwrap();
     let log_s = std::str::from_utf8(&log).unwrap();
 
@@ -474,8 +456,6 @@ fn execute_run_quiet_and_verbose_coexist() {
         log_s.contains(&format!("wrote {path} ({on_disk} bytes)\n")),
         "log: {log_s}"
     );
-
-    let _ = std::fs::remove_file(&tmp);
 }
 
 #[test]
@@ -520,13 +500,6 @@ fn verbose_log_enabled_log_input_detail_all() {
     assert_eq!(sink, b"      5 pages total, all\n");
 }
 
-fn tmp_workdir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("pdfcat-{tag}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir(&dir).unwrap();
-    dir
-}
-
 fn siblings_of(target: &Path) -> Vec<OsString> {
     let parent = target.parent().unwrap();
     let target_name = target.file_name().unwrap();
@@ -540,8 +513,8 @@ fn siblings_of(target: &Path) -> Vec<OsString> {
 
 #[test]
 fn atomic_write_renames_tmp_to_target_on_success() {
-    let dir = tmp_workdir("atomic-ok");
-    let target = dir.join("out.pdf");
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
 
     let count = atomic_write(target.to_str().unwrap(), |w| w.write_all(b"final bytes")).unwrap();
     assert_eq!(count, b"final bytes".len() as u64);
@@ -549,8 +522,6 @@ fn atomic_write_renames_tmp_to_target_on_success() {
 
     let leftovers = siblings_of(&target);
     assert!(leftovers.is_empty(), "tmp leftover: {leftovers:?}");
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -558,8 +529,8 @@ fn atomic_write_preserves_existing_target_on_failure() {
     // The hallmark of atomic write: if the save fails partway through,
     // the pre-existing file at the destination must still be intact, and
     // no half-written .tmp must be left behind.
-    let dir = tmp_workdir("atomic-fail");
-    let target = dir.join("out.pdf");
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("out.pdf");
     fs::write(&target, b"ORIGINAL").unwrap();
 
     let result = atomic_write(target.to_str().unwrap(), |w| {
@@ -572,8 +543,6 @@ fn atomic_write_preserves_existing_target_on_failure() {
 
     let leftovers = siblings_of(&target);
     assert!(leftovers.is_empty(), "tmp leftover: {leftovers:?}");
-
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -595,16 +564,19 @@ fn load_one_source_missing_file_returns_open_input() {
 #[test]
 fn load_one_source_corrupt_file_returns_parse_input() {
     use crate::Error;
-    let tmp = std::env::temp_dir().join(format!("pdfcat-not-a-pdf-{}.pdf", std::process::id()));
-    std::fs::write(&tmp, b"this is not a PDF").unwrap();
+    let mut tmp = tempfile::Builder::new()
+        .prefix("pdfcat-")
+        .suffix(".pdf")
+        .tempfile()
+        .unwrap();
+    tmp.write_all(b"this is not a PDF").unwrap();
     let input = crate::cli::Input {
-        path: tmp.to_str().unwrap().to_string(),
+        path: tmp.path().to_str().unwrap().to_string(),
         ranges: None,
     };
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
     let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
-    let _ = std::fs::remove_file(&tmp);
     match err {
         Error::ParseInput { path, .. } => assert_eq!(path, input.path),
         other => panic!("expected ParseInput, got {other:?}"),
