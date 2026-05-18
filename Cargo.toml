@@ -1,7 +1,11 @@
 [package]
 name = "pdfcat"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
+description = "Concatenate PDF files and extract pages, in pure Rust."
+repository = "https://github.com/yukihebi/pdfcat"
+license = "MIT"
+readme = "README.md"
 
 [dependencies]
 lopdf = "0.40.0"

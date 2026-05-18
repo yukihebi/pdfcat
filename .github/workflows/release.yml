@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify tag matches Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version=$(grep -E '^version *= *' Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag_version cargo=$cargo_version"
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} (version $tag_version) does not match Cargo.toml version $cargo_version"
+            exit 1
+          fi
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar
+          - target: x86_64-apple-darwin
+            os: macos-13
+            archive: tar
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Stage artifacts (Unix)
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          stage="pdfcat-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "$stage"
+          cp "target/${{ matrix.target }}/release/pdfcat" "$stage/"
+          cp LICENSE README.md "$stage/"
+          tar -czf "${stage}.tar.gz" "$stage"
+          shasum -a 256 "${stage}.tar.gz" > "${stage}.tar.gz.sha256"
+
+      - name: Stage artifacts (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $stage = "pdfcat-$env:GITHUB_REF_NAME-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/pdfcat.exe" $stage
+          Copy-Item LICENSE,README.md $stage
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+          $hash = (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower()
+          [System.IO.File]::WriteAllText("$stage.zip.sha256", "$hash  $stage.zip`n")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdfcat-${{ matrix.target }}
+          path: |
+            pdfcat-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+            pdfcat-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+            pdfcat-${{ github.ref_name }}-${{ matrix.target }}.zip
+            pdfcat-${{ github.ref_name }}-${{ matrix.target }}.zip.sha256
+          if-no-files-found: ignore
+
+  release:
+    name: release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten artifacts and build SHA256SUMS
+        shell: bash
+        run: |
+          mkdir -p flat
+          find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} flat/ \;
+          # Each per-file .sha256 already has "HASH  FILENAME" format; sort by filename for determinism.
+          find dist -type f -name '*.sha256' -exec cat {} \; | LC_ALL=C sort -k2 > flat/SHA256SUMS
+          ls -la flat/
+
+      - name: Verify SHA256SUMS
+        shell: bash
+        run: |
+          cd flat
+          shasum -a 256 -c SHA256SUMS
+
+      - name: Publish draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            flat/pdfcat-*.tar.gz
+            flat/pdfcat-*.zip
+            flat/SHA256SUMS
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -8,6 +8,10 @@ no native dependencies.
 
 ## Quickstart
 
+Download the latest binary from the
+[Releases page](https://github.com/yukihebi/pdfcat/releases) and place it
+on your `PATH`. (To install from source instead, see [From source](#from-source).)
+
 ```sh
 # Concatenate x, y, z into out.pdf
 pdfcat x.pdf y.pdf z.pdf -o out.pdf
@@ -21,13 +25,6 @@ pdfcat x.pdf --npages
 
 Run `pdfcat --help` for details. The same Quickstart block is also
 printed to stderr whenever the command line cannot be parsed.
-
-## Build
-
-```sh
-cargo build --release
-# binary at target/release/pdfcat
-```
 
 ## Usage
 
@@ -114,3 +111,24 @@ pdfcat x.pdf y.pdf -o out.pdf -v
   page labels and the document open action are dropped. Link annotations that
   point into those structures may become dangling.
 - Only the file given to `-o` is written; there is no multi-file split mode.
+
+## From source
+
+Requires a Rust toolchain (rustc 1.85+ for edition 2024); install via
+[rustup](https://rustup.rs/) if needed.
+
+```sh
+# Install (binary goes to ~/.cargo/bin/pdfcat)
+cargo install --git https://github.com/yukihebi/pdfcat.git
+# or from a local checkout
+cargo install --path .
+
+# Build / run without installing
+cargo build --release            # binary at target/release/pdfcat
+cargo run --release -- x.pdf -o out.pdf
+
+# Dev checks
+cargo fmt
+cargo clippy
+cargo test
+```
