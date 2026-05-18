@@ -43,7 +43,7 @@ fn tiny_doc(n: usize) -> Document {
 
 #[test]
 fn execute_run_count_pages_only_writes_no_file() {
-    let mut doc = tiny_doc(3);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -62,11 +62,11 @@ fn execute_run_count_pages_only_writes_no_file() {
 fn execute_run_count_bytes_only_matches_serialized_size() {
     // Two independent docs because save_to may mutate internal state and
     // re-saving the same doc is not guaranteed to produce the same bytes.
-    let mut doc_ref = tiny_doc(2);
+    let mut doc_ref = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut expected = Vec::new();
     doc_ref.save_to(&mut expected).unwrap();
 
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -87,7 +87,7 @@ fn execute_run_count_bytes_only_matches_serialized_size() {
 
 #[test]
 fn execute_run_both_flags_emit_pages_then_bytes() {
-    let mut doc = tiny_doc(1);
+    let mut doc = Document::load("tests/fixtures/1page.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -106,7 +106,7 @@ fn execute_run_both_flags_emit_pages_then_bytes() {
 
 #[test]
 fn execute_run_writes_file_when_output_given() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -131,7 +131,7 @@ fn execute_run_writes_file_when_output_given() {
 
 #[test]
 fn execute_run_quiet_count_pages_omits_label() {
-    let mut doc = tiny_doc(3);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -148,11 +148,11 @@ fn execute_run_quiet_count_pages_omits_label() {
 
 #[test]
 fn execute_run_quiet_count_bytes_omits_label() {
-    let mut doc_ref = tiny_doc(2);
+    let mut doc_ref = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut expected = Vec::new();
     doc_ref.save_to(&mut expected).unwrap();
 
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -171,7 +171,7 @@ fn execute_run_quiet_count_bytes_omits_label() {
 
 #[test]
 fn execute_run_quiet_both_emits_two_bare_numbers() {
-    let mut doc = tiny_doc(4);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(false, &mut log);
@@ -184,7 +184,7 @@ fn execute_run_quiet_both_emits_two_bare_numbers() {
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&report).unwrap();
     let mut lines = s.lines();
-    assert_eq!(lines.next(), Some("4"));
+    assert_eq!(lines.next(), Some("3"));
     let bytes: u64 = lines.next().unwrap().parse().unwrap();
     assert!(bytes > 0);
     assert_eq!(lines.next(), None);
@@ -193,7 +193,7 @@ fn execute_run_quiet_both_emits_two_bare_numbers() {
 
 #[test]
 fn execute_run_quiet_no_counts_emits_nothing() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -340,7 +340,7 @@ fn load_sources_silent_when_verbose_false() {
 
 #[test]
 fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
-    let mut doc = tiny_doc(4);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -360,7 +360,7 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
     assert_eq!(lines.len(), 2, "got: {s}");
-    assert_eq!(lines[0], "merged: 4 pages");
+    assert_eq!(lines[0], "merged: 3 pages");
     let wrote_prefix = format!("wrote {path} (");
     assert!(lines[1].starts_with(&wrote_prefix), "got: {}", lines[1]);
     assert!(lines[1].ends_with(" bytes)"), "got: {}", lines[1]);
@@ -374,7 +374,7 @@ fn execute_run_verbose_logs_merged_and_wrote_with_bytes() {
 
 #[test]
 fn execute_run_verbose_no_output_skips_wrote_line() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let mut report = Vec::new();
     let mut log = Vec::new();
     let mut vlog = VerboseLog::new(true, &mut log);
@@ -387,14 +387,14 @@ fn execute_run_verbose_no_output_skips_wrote_line() {
     execute_run(&mut doc, &opts, &mut report, &mut vlog).unwrap();
     let s = std::str::from_utf8(&log).unwrap();
     let lines: Vec<&str> = s.lines().collect();
-    assert_eq!(lines, vec!["merged: 2 pages"]);
+    assert_eq!(lines, vec!["merged: 3 pages"]);
     let r = std::str::from_utf8(&report).unwrap();
     assert!(r.starts_with("bytes: "), "got: {r}");
 }
 
 #[test]
 fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
-    let mut doc = tiny_doc(3);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -425,7 +425,7 @@ fn execute_run_verbose_with_count_bytes_still_writes_one_wrote_line() {
 
 #[test]
 fn execute_run_quiet_and_verbose_coexist() {
-    let mut doc = tiny_doc(2);
+    let mut doc = Document::load("tests/fixtures/3pages.pdf").unwrap();
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("out.pdf");
     let path = target.to_str().unwrap();
@@ -446,12 +446,12 @@ fn execute_run_quiet_and_verbose_coexist() {
     let log_s = std::str::from_utf8(&log).unwrap();
 
     let mut report_lines = report_s.lines();
-    assert_eq!(report_lines.next(), Some("2"));
+    assert_eq!(report_lines.next(), Some("3"));
     let bytes_line = report_lines.next().unwrap();
     assert_eq!(bytes_line.parse::<u64>().unwrap(), on_disk);
     assert_eq!(report_lines.next(), None);
 
-    assert!(log_s.starts_with("merged: 2 pages\n"), "log: {log_s}");
+    assert!(log_s.starts_with("merged: 3 pages\n"), "log: {log_s}");
     assert!(
         log_s.contains(&format!("wrote {path} ({on_disk} bytes)\n")),
         "log: {log_s}"
