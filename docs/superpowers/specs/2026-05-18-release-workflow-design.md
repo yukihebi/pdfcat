@@ -92,8 +92,7 @@ Tag-based only. No `workflow_dispatch`.
 5. `cargo build --release --target <triple>`
 6. Stage the binary into a versioned directory:
    - dirname: `pdfcat-${GITHUB_REF_NAME}-<triple>`
-   - contents: just the `pdfcat[.exe]` binary. README/LICENSE bundling is
-     deferred (see "Open questions" below — no LICENSE file exists yet).
+   - contents: `pdfcat[.exe]`, `LICENSE`, `README.md`.
 7. Archive:
    - Unix: `tar -C <stage_parent> -czf <dir>.tar.gz <dir>`
    - Windows: `Compress-Archive` into `<dir>.zip`
@@ -176,12 +175,14 @@ Options:
 - Code signing / notarization for macOS.
 - Homebrew tap / scoop bucket.
 
+## Resolved decisions
+
+- **License: MIT** (Copyright 2026 yukihebi). Compatible with deps: `lopdf`
+  is MIT; `thiserror` and `tempfile` are MIT OR Apache-2.0. `Cargo.toml`
+  metadata (description, repository, license, readme, keywords, categories)
+  filled in the same commit as the LICENSE file and the `1.0.0` version
+  bump.
+
 ## Open questions
 
-- **No LICENSE file.** The repo has no `LICENSE` and `Cargo.toml` has no
-  `license` field. Publishing a 1.0.0 binary without a license leaves users in
-  an ambiguous legal state ("all rights reserved" by GitHub ToS default). The
-  maintainer should decide on a license (MIT / Apache-2.0 / MIT OR Apache-2.0
-  / etc.) before tagging `v1.0.0`. Out of scope for this PR's workflow design
-  but flagged here so it is not forgotten. Implementation plan will not block
-  on this; the LICENSE decision can land in a follow-up.
+None outstanding.
