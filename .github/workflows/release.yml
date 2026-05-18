@@ -77,7 +77,7 @@ jobs:
           Copy-Item LICENSE,README.md $stage
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
           $hash = (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  $stage.zip" | Out-File -FilePath "$stage.zip.sha256" -Encoding ascii -NoNewline
+          [System.IO.File]::WriteAllText("$stage.zip.sha256", "$hash  $stage.zip`n")
 
       - uses: actions/upload-artifact@v4
         with:
@@ -108,6 +108,12 @@ jobs:
           # Each per-file .sha256 already has "HASH  FILENAME" format; sort by filename for determinism.
           find dist -type f -name '*.sha256' -exec cat {} \; | LC_ALL=C sort -k2 > flat/SHA256SUMS
           ls -la flat/
+
+      - name: Verify SHA256SUMS
+        shell: bash
+        run: |
+          cd flat
+          shasum -a 256 -c SHA256SUMS
 
       - name: Publish draft release
         uses: softprops/action-gh-release@v2
