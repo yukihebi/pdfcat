@@ -580,3 +580,39 @@ fn load_one_source_corrupt_file_returns_parse_input() {
         other => panic!("expected ParseInput, got {other:?}"),
     }
 }
+
+#[test]
+fn load_one_source_no_pages_returns_no_pages() {
+    use crate::Error;
+    let input = crate::cli::Input {
+        path: "tests/fixtures/0page.pdf".to_string(),
+        ranges: None,
+    };
+    let mut log = Vec::new();
+    let mut vlog = VerboseLog::new(false, &mut log);
+    let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
+    match err {
+        Error::NoPages { path } => assert_eq!(path, input.path),
+        other => panic!("expected NoPages, got {other:?}"),
+    }
+}
+
+#[test]
+fn load_one_source_page_selection_out_of_range() {
+    use crate::Error;
+    use crate::pages::PageSpecError;
+    let input = crate::cli::Input {
+        path: "tests/fixtures/3pages.pdf".to_string(),
+        ranges: Some(crate::pages::parse_ranges("10").unwrap()),
+    };
+    let mut log = Vec::new();
+    let mut vlog = VerboseLog::new(false, &mut log);
+    let err = load_one_source(&input, 1, 1, "", &mut vlog).unwrap_err();
+    match err {
+        Error::PageSelection { path, source } => {
+            assert_eq!(path, input.path);
+            assert_eq!(source, PageSpecError::OutOfRange { page: 10, total: 3 });
+        }
+        other => panic!("expected PageSelection, got {other:?}"),
+    }
+}
