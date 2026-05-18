@@ -1,5 +1,5 @@
 use super::*;
-use lopdf::{Dictionary, Document, Object};
+use lopdf::Document;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
@@ -7,40 +7,6 @@ use std::path::Path;
 
 // Bring VerboseLog into scope for all tests in this file.
 use super::VerboseLog;
-
-#[allow(dead_code)]
-fn tiny_doc(n: usize) -> Document {
-    let mut doc = Document::with_version("1.5");
-    let pages_id = doc.add_object(Dictionary::new());
-    let kids: Vec<Object> = (0..n)
-        .map(|_| {
-            let mut page = Dictionary::new();
-            page.set("Type", "Page");
-            page.set("Parent", pages_id);
-            page.set(
-                "MediaBox",
-                Object::Array(vec![
-                    Object::Integer(0),
-                    Object::Integer(0),
-                    Object::Integer(10),
-                    Object::Integer(10),
-                ]),
-            );
-            Object::Reference(doc.add_object(page))
-        })
-        .collect();
-    let mut pages = Dictionary::new();
-    pages.set("Type", "Pages");
-    pages.set("Count", n as i64);
-    pages.set("Kids", kids);
-    doc.objects.insert(pages_id, Object::Dictionary(pages));
-    let mut catalog = Dictionary::new();
-    catalog.set("Type", "Catalog");
-    catalog.set("Pages", pages_id);
-    let catalog_id = doc.add_object(catalog);
-    doc.trailer.set("Root", catalog_id);
-    doc
-}
 
 #[test]
 fn execute_run_count_pages_only_writes_no_file() {
@@ -263,18 +229,6 @@ fn fmt_header_index_pads_for_two_digit_total() {
 fn fmt_header_index_pads_for_three_digit_total() {
     assert_eq!(fmt_header_index(1, 100), "[  1/100]");
     assert_eq!(fmt_header_index(100, 100), "[100/100]");
-}
-
-#[allow(dead_code)]
-fn write_tiny_pdf(n: usize) -> tempfile::NamedTempFile {
-    let mut doc = tiny_doc(n);
-    let tmp = tempfile::Builder::new()
-        .prefix("pdfcat-")
-        .suffix(".pdf")
-        .tempfile()
-        .unwrap();
-    doc.save(tmp.path()).unwrap();
-    tmp
 }
 
 #[test]
