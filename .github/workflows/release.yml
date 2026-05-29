@@ -24,9 +24,26 @@ jobs:
             exit 1
           fi
 
+  notices:
+    name: generate THIRD-PARTY-NOTICES
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      # Pinned so the bundled notices come from a known cargo-about version.
+      - name: Install cargo-about
+        run: cargo install --locked --features cli --version 0.9.0 cargo-about
+      - name: Generate THIRD-PARTY-NOTICES
+        run: cargo about generate about.hbs -o THIRD-PARTY-NOTICES
+      - uses: actions/upload-artifact@v7
+        with:
+          name: third-party-notices
+          path: THIRD-PARTY-NOTICES
+
   build:
     name: build ${{ matrix.target }}
-    needs: verify
+    needs: [verify, notices]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -53,6 +70,11 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Download THIRD-PARTY-NOTICES
+        uses: actions/download-artifact@v8
+        with:
+          name: third-party-notices
+
       - name: Stage artifacts (Unix)
         if: matrix.archive == 'tar'
         shell: bash
@@ -60,7 +82,7 @@ jobs:
           stage="pdfcat-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "$stage"
           cp "target/${{ matrix.target }}/release/pdfcat" "$stage/"
-          cp LICENSE README.md "$stage/"
+          cp LICENSE README.md THIRD-PARTY-NOTICES "$stage/"
           tar -czf "${stage}.tar.gz" "$stage"
           shasum -a 256 "${stage}.tar.gz" > "${stage}.tar.gz.sha256"
 
@@ -71,7 +93,7 @@ jobs:
           $stage = "pdfcat-$env:GITHUB_REF_NAME-${{ matrix.target }}"
           New-Item -ItemType Directory -Path $stage | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/pdfcat.exe" $stage
-          Copy-Item LICENSE,README.md $stage
+          Copy-Item LICENSE,README.md,THIRD-PARTY-NOTICES $stage
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
           $hash = (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower()
           [System.IO.File]::WriteAllText("$stage.zip.sha256", "$hash  $stage.zip`n")

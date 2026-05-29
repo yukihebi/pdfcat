@@ -132,3 +132,10 @@ cargo fmt
 cargo clippy
 cargo test
 ```
+
+## License
+
+pdfcat is licensed under the [MIT License](LICENSE). Prebuilt release archives
+also bundle a `THIRD-PARTY-NOTICES` file listing the licenses of the bundled
+Rust dependencies, generated from the dependency tree with
+[cargo-about](https://github.com/EmbarkStudios/cargo-about) (see `about.toml`).
