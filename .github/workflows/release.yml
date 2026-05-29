@@ -60,7 +60,7 @@ jobs:
           stage="pdfcat-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "$stage"
           cp "target/${{ matrix.target }}/release/pdfcat" "$stage/"
-          cp LICENSE README.md "$stage/"
+          cp LICENSE README.md THIRD-PARTY-NOTICES "$stage/"
           tar -czf "${stage}.tar.gz" "$stage"
           shasum -a 256 "${stage}.tar.gz" > "${stage}.tar.gz.sha256"
 
@@ -71,7 +71,7 @@ jobs:
           $stage = "pdfcat-$env:GITHUB_REF_NAME-${{ matrix.target }}"
           New-Item -ItemType Directory -Path $stage | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/pdfcat.exe" $stage
-          Copy-Item LICENSE,README.md $stage
+          Copy-Item LICENSE,README.md,THIRD-PARTY-NOTICES $stage
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
           $hash = (Get-FileHash "$stage.zip" -Algorithm SHA256).Hash.ToLower()
           [System.IO.File]::WriteAllText("$stage.zip.sha256", "$hash  $stage.zip`n")
