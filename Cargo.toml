@@ -8,6 +8,6 @@ license = "MIT"
 readme = "README.md"
 
 [dependencies]
-lopdf = "0.42.0"
+lopdf = "0.44.0"
 tempfile = "3"
 thiserror = "2.0.18"
