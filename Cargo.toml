@@ -11,6 +11,6 @@ readme = "README.md"
 # lopdf's default chrono/jiff/time date conversions are unused here, and its
 # `time` impl does not compile against time 0.3.47. `rayon` is kept: it is the
 # parallel fast path for xref and object stream parsing.
-lopdf = { version = "0.44.0", default-features = false, features = ["rayon"] }
+lopdf = { version = "0.45.0", default-features = false, features = ["rayon"] }
 tempfile = "3"
 thiserror = "2.0.18"
